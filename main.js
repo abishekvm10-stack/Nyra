@@ -20,6 +20,7 @@ let tray = null;
 let settingsWindow = null;
 
 const HOTKEY = "Alt+P";
+const DEFAULT_BACKEND_URL = "https://nyra-pddf.onrender.com";
 
 function notify(title, body) {
   new Notification({ title, body }).show();
@@ -32,7 +33,7 @@ function getSettings() {
     targetStyle: store.get("targetStyle", "generic"),
     apiKey: store.get("apiKey", ""),
     ollamaUrl: store.get("ollamaUrl", "http://localhost:11434"),
-    backendUrl: store.get("backendUrl", ""),
+    backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),
     projectFolder: store.get("projectFolder", ""),
   };
 }
