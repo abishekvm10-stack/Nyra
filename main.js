@@ -88,13 +88,14 @@ function restoreLastOriginal() {
 function createSettingsWindow() {
   if (settingsWindow) {
     settingsWindow.show();
+    settingsWindow.focus();
     return;
   }
   settingsWindow = new BrowserWindow({
     width: 340,
     height: 540,
     resizable: false,
-    title: "Nyra Settings",
+    title: "Nyra",
     webPreferences: {
       preload: path.join(__dirname, "settings", "preload.js"),
       contextIsolation: true,
@@ -104,6 +105,12 @@ function createSettingsWindow() {
   settingsWindow.loadFile(path.join(__dirname, "settings", "settings.html"));
   settingsWindow.on("closed", () => (settingsWindow = null));
 }
+
+// Launching Nyra again should reopen the normal window instead of appearing
+// to do nothing when the tray copy is already running.
+app.on("second-instance", () => {
+  createSettingsWindow();
+});
 
 function createTray() {
   tray = new Tray(path.join(__dirname, "settings", "tray-icon.png"));
@@ -153,9 +160,7 @@ app.whenReady().then(() => {
     store.set("launchAtStartupSet", true);
   }
 
-  if (!store.get("provider")) {
-    createSettingsWindow();
-  }
+  createSettingsWindow();
 
   if (process.platform === "darwin" && app.dock) app.dock.hide();
 });
