@@ -1,0 +1,14 @@
+{
+  "name": "nyra-backend",
+  "version": "0.1.0",
+  "description": "Tiny shared backend for Nyra \u2014 holds the API key server-side so friends never need their own.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0"
+  }
+}

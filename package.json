@@ -1,0 +1,34 @@
+{
+  "name": "nyra-desktop",
+  "version": "0.1.0",
+  "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.nyra.desktop",
+    "productName": "Nyra",
+    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md"],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": { "target": "dmg", "category": "public.app-category.productivity" }
+  }
+}

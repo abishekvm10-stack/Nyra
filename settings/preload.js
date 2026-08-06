@@ -1,0 +1,8 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("nyra", {
+  getSettings: () => ipcRenderer.invoke("nyra:get-settings"),
+  saveSettings: (settings) => ipcRenderer.invoke("nyra:save-settings", settings),
+  chooseProjectFolder: () => ipcRenderer.invoke("nyra:choose-project-folder"),
+  clearProjectFolder: () => ipcRenderer.invoke("nyra:clear-project-folder"),
+});

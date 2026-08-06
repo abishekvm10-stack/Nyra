@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+.env
+backend/.env
+*.log
+
+# Electron user data and local settings
+*.json.bak

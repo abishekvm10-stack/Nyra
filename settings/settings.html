@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nyra Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <h1>Nyra</h1>
+  <p class="subtitle">Select text anywhere, Ctrl+C, then Alt+P to compile it.</p>
+
+  <label for="provider">Model provider</label>
+  <select id="provider">
+    <option value="">Choose a provider&hellip;</option>
+    <option value="nyra-cloud">Nyra Cloud (free, shared &mdash; no key needed)</option>
+    <option value="local">Local (Ollama &mdash; free, no rate limit)</option>
+    <option value="groq">Groq (free, large models &mdash; rate limited)</option>
+    <option value="openai">OpenAI</option>
+    <option value="anthropic">Anthropic</option>
+    <option value="gemini">Google</option>
+  </select>
+
+  <label for="tier">Model tier</label>
+  <select id="tier">
+    <option value="fast">Fast &amp; cheap (default)</option>
+    <option value="quality">High quality (slower, costs more)</option>
+  </select>
+  <p class="hint" id="modelPreview"></p>
+
+  <label for="targetStyle">Target style</label>
+  <select id="targetStyle">
+    <option value="generic">Generic (recommended)</option>
+    <option value="claude">Claude</option>
+    <option value="chatgpt">ChatGPT</option>
+    <option value="gemini">Gemini</option>
+  </select>
+  <p class="hint">Lightly adapts the compiled prompt to the style of the app you will paste it into.</p>
+
+  <div id="localFields" class="hidden">
+    <label for="ollamaUrl">Ollama server URL</label>
+    <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
+  </div>
+
+  <div id="cloudFields" class="hidden">
+    <label for="backendUrl">Nyra Cloud backend URL</label>
+    <input id="backendUrl" type="text" placeholder="https://your-backend.onrender.com" />
+    <p class="hint">
+      Whoever set up Nyra Cloud shares this URL with you \u2014 no API
+      key needed on your end, but it's a shared free quota, so it may
+      occasionally be busy.
+    </p>
+  </div>
+
+  <div id="apiKeyField">
+    <label for="apiKey">API key</label>
+    <input id="apiKey" type="password" placeholder="Paste your API key" />
+    <p class="hint hidden" id="groqHint">
+      Groq's key is free (no card) and runs large models fast, but is
+      rate-limited (~30 req/min, ~1,000/day).
+    </p>
+  </div>
+
+  <button id="save">Save</button>
+  <p id="status" class="status"></p>
+
+  <hr />
+
+  <label>Project context <span class="hint">(optional)</span></label>
+  <p class="hint">
+    Connect a folder of your own notes/docs. Nyra pulls in relevant
+    snippets when compiling, so the result reflects real details
+    instead of generic phrasing.
+  </p>
+  <p class="hint" id="projectFolderPath">No folder connected.</p>
+  <button id="chooseFolder" class="secondary">Choose Folder&hellip;</button>
+  <button id="clearFolder" class="secondary hidden">Disconnect</button>
+
+  <hr />
+  <p class="hint">Hotkey is fixed at <kbd>Alt</kbd>+<kbd>P</kbd> in this version. Close this window any time &mdash; Nyra keeps running in the tray/menu bar.</p>
+</body>
+<script src="settings.js"></script>
+</html>
