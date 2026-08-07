@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
+const { autoUpdater } = require("electron-updater");
 const { compilePrompt } = require("./compiler");
 const { getRelevantContext } = require("./context");
 
@@ -24,6 +25,56 @@ const DEFAULT_BACKEND_URL = "https://nyra-pddf.onrender.com";
 
 function notify(title, body) {
   new Notification({ title, body }).show();
+}
+
+function setupAutoUpdater() {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("update-available", async (info) => {
+    const result = await dialog.showMessageBox({
+      type: "info",
+      title: "Nyra update available",
+      message: `Nyra ${info.version} is available. Download it now?`,
+      buttons: ["Download update", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (result.response === 0) {
+      try {
+        await autoUpdater.downloadUpdate();
+      } catch (error) {
+        notify("Nyra update failed", String(error.message || error));
+      }
+    }
+  });
+
+  autoUpdater.on("update-downloaded", async () => {
+    const result = await dialog.showMessageBox({
+      type: "info",
+      title: "Nyra update ready",
+      message: "The update is ready. Restart Nyra to install it?",
+      buttons: ["Restart and install", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+    });
+
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on("error", (error) => {
+    console.error("Nyra update check failed:", error.message || error);
+  });
+
+  // Give the tray and main window time to finish opening first.
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      console.error("Nyra update check failed:", error.message || error);
+    });
+  }, 5000);
 }
 
 function getSettings() {
@@ -111,6 +162,7 @@ function createSettingsWindow() {
 // to do nothing when the tray copy is already running.
 app.on("second-instance", () => {
   createSettingsWindow();
+  setupAutoUpdater();
 });
 
 function createTray() {
