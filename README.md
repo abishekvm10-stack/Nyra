@@ -73,6 +73,15 @@ Mac in the cloud, for free.
    appears \u2014 this bypasses the warning permanently for that app.
 4. After that first right-click-Open, it runs completely normally.
 
+If macOS still says **“The application Nyra can't be opened”** after extracting
+the download, remove the download quarantine flag in Terminal and try again:
+```
+xattr -dr com.apple.quarantine /Applications/Nyra.app
+open /Applications/Nyra.app
+```
+Replace the path if you put Nyra somewhere else. The macOS workflow builds a
+universal app, so the same download works on both Intel and Apple-silicon Macs.
+
 This whole pipeline is free and repeatable \u2014 every time you update
 Nyra, push the change to GitHub and re-run the workflow for a fresh
 build on both platforms.

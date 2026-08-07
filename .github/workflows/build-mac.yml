@@ -21,10 +21,12 @@ jobs:
         run: npm ci
 
       - name: Build macOS DMG
-        run: npm run build:mac -- --publish never
+        run: npm run build:mac -- --universal --publish never
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
           name: Nyra-macOS
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.zip

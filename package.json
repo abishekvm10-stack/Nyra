@@ -29,6 +29,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "mac": { "target": "dmg", "category": "public.app-category.productivity" }
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.productivity",
+      "artifactName": "Nyra-${version}-${arch}.${ext}"
+    }
   }
 }
