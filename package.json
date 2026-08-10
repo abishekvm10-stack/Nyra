@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.nyra.desktop",
@@ -33,7 +33,13 @@
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.productivity",
-      "artifactName": "Nyra-${version}-${arch}.${ext}"
+      "artifactName": "Nyra-${version}-${arch}.${ext}",
+      "sign": {
+        "identity": "-",
+        "hardenedRuntime": true,
+        "entitlements": "build/entitlements.mac.plist",
+        "entitlementsInherit": "build/entitlements.mac.inherit.plist"
+      }
     },
     "publish": {
       "provider": "github",
