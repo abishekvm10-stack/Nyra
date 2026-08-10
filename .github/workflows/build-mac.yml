@@ -25,7 +25,7 @@ jobs:
 
       - name: Verify macOS app signature
         run: |
-          APP=$(find dist -maxdepth 2 -name 'Nyra.app' -type d -print -quit)
+          APP=$(find dist -name 'Nyra.app' -type d -print -quit)
           test -n "$APP"
           codesign --verify --deep --verbose=2 "$APP"
           codesign --display --verbose=4 "$APP" 2>&1
