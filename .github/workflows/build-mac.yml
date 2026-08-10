@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Build macOS app
-        run: npm run build:mac -- --universal --mac target=dir --publish never
+        run: npm run build:mac -- --universal --dir --publish never
 
       - name: Ad-hoc sign the app
         run: |
