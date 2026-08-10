@@ -23,6 +23,14 @@ jobs:
       - name: Build macOS DMG
         run: npm run build:mac -- --universal --publish never
 
+      - name: Verify macOS app signature
+        run: |
+          APP=$(find dist -maxdepth 2 -name 'Nyra.app' -type d -print -quit)
+          test -n "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --display --verbose=4 "$APP" 2>&1 | grep -E 'Identifier=|TeamIdentifier=|Authority=-'
+          lipo -info "$APP/Contents/MacOS/Nyra" | grep -E 'x86_64|arm64'
+
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
