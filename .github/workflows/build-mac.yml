@@ -14,24 +14,35 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build macOS DMG
-        run: npm run build:mac -- --universal --publish never
+      - name: Build macOS app
+        run: npm run build:mac -- --universal --mac target=dir --publish never
 
-      - name: Verify macOS app signature
+      - name: Ad-hoc sign the app
         run: |
           APP=$(find dist -name 'Nyra.app' -type d -print -quit)
+          echo "Found app at: $APP"
           test -n "$APP"
+          codesign --sign - --force --deep "$APP"
           codesign --verify --deep --verbose=2 "$APP"
-          codesign --display --verbose=4 "$APP" 2>&1
-          lipo -info "$APP/Contents/MacOS/Nyra" | grep -E 'x86_64|arm64'
+          echo "App is signed successfully"
 
-      - name: Upload DMG
+      - name: Create DMG
+        run: |
+          APP=$(find dist -name 'Nyra.app' -type d -print -quit)
+          hdiutil create -volname "Nyra" -srcfolder "$APP" -ov -format UDZO "dist/Nyra.dmg"
+
+      - name: Create ZIP
+        run: |
+          APP=$(find dist -name 'Nyra.app' -type d -print -quit)
+          cd dist && zip -ry "Nyra.zip" "$(basename "$APP")"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Nyra-macOS

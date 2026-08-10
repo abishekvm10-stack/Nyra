@@ -34,12 +34,7 @@
       "target": ["dmg", "zip"],
       "category": "public.app-category.productivity",
       "artifactName": "Nyra-${version}-${arch}.${ext}",
-      "sign": {
-        "identity": "-",
-        "hardenedRuntime": true,
-        "entitlements": "build/entitlements.mac.plist",
-        "entitlementsInherit": "build/entitlements.mac.inherit.plist"
-      }
+      "sign": null
     },
     "publish": {
       "provider": "github",
