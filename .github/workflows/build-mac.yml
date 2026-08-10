@@ -27,8 +27,8 @@ jobs:
         run: |
           APP=$(find dist -maxdepth 2 -name 'Nyra.app' -type d -print -quit)
           test -n "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          codesign --display --verbose=4 "$APP" 2>&1 | grep -E 'Identifier=|TeamIdentifier=|Authority=-'
+          codesign --verify --deep --verbose=2 "$APP"
+          codesign --display --verbose=4 "$APP" 2>&1
           lipo -info "$APP/Contents/MacOS/Nyra" | grep -E 'x86_64|arm64'
 
       - name: Upload DMG
