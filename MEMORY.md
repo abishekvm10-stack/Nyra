@@ -43,3 +43,6 @@ Mac build is **still broken in practice, unresolved** — this is the active ope
 
 ## Open questions for the user
 - None outstanding right now — mid-diagnosis, paused per user's request to continue later.
+
+## Housekeeping
+- 2026-08-18: Project had ballooned past 1.8GB. Cleaned up: deleted `d:\Nyra\files.zip` (767MB stale full backup of this same `files/` folder from Aug 10, superseded), deleted `dist/` (411MB, regenerable via `npm run build:win`/`build:mac`), deleted `node_modules/` (349MB, regenerable via `npm install` — **run this before next `npm start`/build**), and pruned `.git/` from 354MB down to 229KB (`git reflog expire --expire=now --expire-unreachable=now --all && git gc --prune=now --aggressive` — removed leftover unreachable objects from old abandoned commits during the earlier macOS-signing-fix iteration; `main` history and sync with `origin/main` unaffected, verified clean). Project folder is now ~507KB excluding node_modules.
