@@ -21,7 +21,7 @@ Windows build confirmed working (`npm run build:win` succeeds, produces `dist/wi
 ## Planned / open
 - Generate a real `build/icon.icns` from proper source artwork (needs a ~1024x1024 source image, not currently available — app ships with Electron's default icon on Mac until then). Skipped deliberately this round per user.
 - No current plan to reintroduce automatic keystroke simulation (nut-js or otherwise) — current clipboard-only design was a deliberate reliability fix, not an oversight. Revisit only if manual copy/paste proves to be a real usability problem in practice.
-- The actual Mac-launch fix (`afterSign` hook) has not been verified on real macOS hardware yet — do this before considering the Mac side fully closed out.
+- **Still needs verification**: fix is committed and pushed (`27aeb53` on `main`, 2026-08-17) but not yet confirmed on real macOS. No `gh` CLI or GitHub token available in this dev environment, so the user needs to manually run `build-mac.yml` via the Actions tab (or push a `v*` tag for `release.yml`) and check the "Verify ad-hoc signature" step passes, then test the downloaded app actually opens on their Mac without the Gatekeeper hard-block.
 
 ## Open questions for the user
 - None outstanding right now.
