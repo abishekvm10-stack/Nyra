@@ -117,8 +117,7 @@ Electron.
 ## Known rough edges (expected at this stage)
 - **Replace the placeholder tray icon** (`settings/tray-icon.png`)
   before sharing this with anyone else \u2014 it's a generated stand-in.
-- **The hotkey is fixed at Alt+P.** Making it configurable is a
-  reasonable next feature, not done yet.
+- **Hotkey is configurable** (Settings → click the Hotkey field, then press a combo) — defaults to Alt+P. Needs at least one modifier (Ctrl/Alt/Shift); if a saved combo stops working (e.g. another app claims it between sessions), Nyra falls back to Alt+P automatically and tells you.
 - **You select the text yourself now** (Ctrl+C before, Ctrl+V after) \u2014
   this is a deliberate simplification after the automatic version
   proved unreliable, not a regression to fix later.

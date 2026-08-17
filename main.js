@@ -20,8 +20,18 @@ const store = new Store();
 let tray = null;
 let settingsWindow = null;
 
-const HOTKEY = "Alt+P";
+const DEFAULT_HOTKEY = "Alt+P";
 const DEFAULT_BACKEND_URL = "https://nyra-pddf.onrender.com";
+
+// The hotkey currently registered with the OS, which is not always the
+// same as the stored preference: a saved combo can stop working if
+// another app claims it between sessions, and we fall back rather than
+// leaving Nyra with no hotkey at all.
+let activeHotkey = null;
+
+function currentHotkey() {
+  return activeHotkey || DEFAULT_HOTKEY;
+}
 
 function notify(title, body) {
   new Notification({ title, body }).show();
@@ -81,6 +91,7 @@ function getSettings() {
   return {
     provider: store.get("provider", ""),
     tier: store.get("tier", "fast"),
+    hotkey: currentHotkey(),
     targetAgent: store.get("targetAgent", ""),
     targetModelName: store.get("targetModelName", ""),
     apiKey: store.get("apiKey", ""),
@@ -88,6 +99,36 @@ function getSettings() {
     backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),
     projectFolder: store.get("projectFolder", ""),
   };
+}
+
+// Swaps the global hotkey. Returns a result object instead of throwing
+// because a rejected combo is a normal thing a user can pick in
+// Settings, not an exceptional condition. On any failure the
+// previously working hotkey is restored, so there is never a moment
+// where Nyra is running with no way to trigger it.
+function registerHotkey(accelerator) {
+  const previous = activeHotkey;
+  if (previous) globalShortcut.unregister(previous);
+
+  let registered = false;
+  let error = null;
+  try {
+    registered = globalShortcut.register(accelerator, handleHotkey);
+    if (!registered) error = `${accelerator} is already in use by another app.`;
+  } catch {
+    // Electron throws on a malformed accelerator rather than returning false.
+    error = `${accelerator} isn't a valid shortcut.`;
+  }
+
+  if (registered) {
+    activeHotkey = accelerator;
+    return { ok: true };
+  }
+
+  if (previous && globalShortcut.register(previous, handleHotkey)) {
+    activeHotkey = previous;
+  }
+  return { ok: false, error };
 }
 
 async function handleHotkey() {
@@ -106,7 +147,7 @@ async function handleHotkey() {
   const rawText = clipboard.readText().trim();
 
   if (!rawText) {
-    notify("Nyra", "Copy some text first (Ctrl+C), then press Alt+P.");
+    notify("Nyra", `Copy some text first (Ctrl+C), then press ${currentHotkey()}.`);
     return;
   }
 
@@ -175,20 +216,22 @@ function createTray() {
   // Windows/Linux trays render the icon's real colors and ignore this flag.
   if (process.platform === "darwin") trayIcon.setTemplateImage(true);
   tray = new Tray(trayIcon);
-  tray.setToolTip("Nyra \u2014 Alt+P to compile whatever you're typing");
   rebuildTrayMenu();
 }
 
+// Also refreshes the hotkey text, so this is what gets called after a
+// hotkey change to make the tray reflect it immediately.
 function rebuildTrayMenu() {
   const launchAtStartup = app.isPackaged
     ? app.getLoginItemSettings().openAtLogin
     : false;
 
+  tray.setToolTip(`Nyra \u2014 ${currentHotkey()} to compile whatever you're typing`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Settings\u2026", click: createSettingsWindow },
       { label: "Restore last original prompt", click: restoreLastOriginal },
-      { label: `Hotkey: ${HOTKEY}`, enabled: false },
+      { label: `Hotkey: ${currentHotkey()}`, enabled: false },
       { type: "separator" },
       {
         label: "Launch at startup",
@@ -206,12 +249,21 @@ function rebuildTrayMenu() {
 }
 
 app.whenReady().then(() => {
-  createTray();
-
-  const registered = globalShortcut.register(HOTKEY, handleHotkey);
-  if (!registered) {
-    notify("Nyra", `Couldn't register ${HOTKEY} \u2014 another app may already be using it.`);
+  const storedHotkey = store.get("hotkey", DEFAULT_HOTKEY);
+  let result = registerHotkey(storedHotkey);
+  if (!result.ok && storedHotkey !== DEFAULT_HOTKEY) {
+    // The saved combo (possibly customized in a prior session) no
+    // longer works \u2014 fall back to the default rather than leaving
+    // Nyra with no way to trigger it at all.
+    result = registerHotkey(DEFAULT_HOTKEY);
   }
+  if (!result.ok) {
+    notify("Nyra", `Couldn't register ${DEFAULT_HOTKEY} \u2014 another app may already be using it.`);
+  } else if (activeHotkey !== storedHotkey) {
+    notify("Nyra", `${storedHotkey} is no longer available \u2014 using ${activeHotkey} instead. Change it in Settings.`);
+  }
+
+  createTray();
 
   // Default to launching on login for a real installed copy \u2014 the
   // tray checkbox lets the user turn this off afterward. Guarded by
@@ -236,6 +288,17 @@ ipcMain.handle("nyra:get-settings", () => getSettings());
 ipcMain.handle("nyra:save-settings", (_event, settings) => {
   store.set(settings);
   return true;
+});
+// Separate from save-settings: a hotkey needs to be validated against
+// the OS the moment it's captured (so a taken combo is caught right
+// there), not deferred until the user clicks Save.
+ipcMain.handle("nyra:set-hotkey", (_event, accelerator) => {
+  const result = registerHotkey(accelerator);
+  if (result.ok) {
+    store.set("hotkey", accelerator);
+    rebuildTrayMenu();
+  }
+  return result;
 });
 ipcMain.handle("nyra:choose-project-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });

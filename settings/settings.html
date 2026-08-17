@@ -77,6 +77,12 @@
 
   <hr />
 
+  <label for="hotkeyInput">Hotkey</label>
+  <input id="hotkeyInput" type="text" readonly placeholder="Click, then press a key combo…" />
+  <p class="hint" id="hotkeyHint">Click the field above, then press the combo you want.</p>
+
+  <hr />
+
   <label>Project context <span class="hint">(optional)</span></label>
   <p class="hint">
     Connect a folder of your own notes/docs. Nyra pulls in relevant
@@ -88,7 +94,7 @@
   <button id="clearFolder" class="secondary hidden">Disconnect</button>
 
   <hr />
-  <p class="hint">Hotkey is fixed at <kbd>Alt</kbd>+<kbd>P</kbd> in this version. Close this window any time &mdash; Nyra keeps running in the tray/menu bar.</p>
+  <p class="hint">Close this window any time &mdash; Nyra keeps running in the tray/menu bar.</p>
 </body>
 <script src="settings.js"></script>
 </html>

@@ -45,7 +45,7 @@ Stated plainly: **free + unlimited + frontier-quality — pick two.** Local gets
 ## Phases
 
 ### Phase 1 (in progress) — Desktop MVP
-- Electron app, tray/menu-bar icon, global hotkey (Alt+P).
+- Electron app, tray/menu-bar icon, global hotkey (Alt+P by default, user-configurable in Settings).
 - Manual select → copy → hotkey → compile → paste loop via the OS clipboard (no keyboard-simulation library — see architecture note above).
 - Settings window: provider, tier, AI agent + model, API key, Ollama URL.
 - **Target model tuning**: two Settings fields — "AI agent" (Claude/ChatGPT/Gemini/Other/Generic dropdown) and "Model" (suggestions that change per agent, e.g. Sonnet 5/Opus 5/Fable 5/Haiku 4.5 under Claude — always free-text-editable, so anything not listed, including models that don't exist yet, still works). `compiler.js` combines the two into one string and matches it against family-level hints (Claude/GPT/Gemini/open-weight, `getTargetModelGuidance`), falling back to the compiling model's own knowledge for anything unrecognized — no code change needed when new models ship. Same combine-and-match logic mirrored in `backend/server.js` for the Nyra Cloud path — **that one needs a Render redeploy to pick up changes**, unlike the desktop app which just needs a rebuild.

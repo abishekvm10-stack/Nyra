@@ -35,6 +35,46 @@ const modelPreviewEl = document.getElementById("modelPreview");
 const chooseFolderButton = document.getElementById("chooseFolder");
 const clearFolderButton = document.getElementById("clearFolder");
 const projectFolderPathEl = document.getElementById("projectFolderPath");
+const hotkeyInput = document.getElementById("hotkeyInput");
+const hotkeyHint = document.getElementById("hotkeyHint");
+
+// Named keys accelerators accept beyond plain letters/digits/function
+// keys. Anything not covered here (punctuation, media keys, etc.)
+// isn't offered — keeping the recorder simple and predictable rather
+// than trying to cover every possible key on every layout.
+const CODE_TO_ACCELERATOR_KEY = {
+  Space: "Space",
+  Tab: "Tab",
+  Escape: "Esc",
+  Backspace: "Backspace",
+  Delete: "Delete",
+  Insert: "Insert",
+  Enter: "Return",
+  ArrowUp: "Up",
+  ArrowDown: "Down",
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  Home: "Home",
+  End: "End",
+  PageUp: "PageUp",
+  PageDown: "PageDown",
+};
+
+// Derived from e.code, not e.key: e.key reflects what the held
+// modifiers turn the key INTO (e.g. Alt can shift what a key reports
+// on some layouts), while e.code identifies the physical key
+// regardless of modifiers — the correct source for a shortcut.
+function codeToAcceleratorKey(code) {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+  return CODE_TO_ACCELERATOR_KEY[code] || null;
+}
+
+function setHotkeyHint(text, color) {
+  hotkeyHint.textContent = text;
+  hotkeyHint.style.color = color;
+}
 
 function updateFieldVisibility() {
   const provider = providerSelect.value;
@@ -94,6 +134,49 @@ targetAgentSelect.addEventListener("change", () => {
   updateTargetModelField();
 });
 
+hotkeyInput.addEventListener("focus", () => {
+  setHotkeyHint("Press your combo now…", "#6b7383");
+});
+
+hotkeyInput.addEventListener("blur", () => {
+  setHotkeyHint("Click the field above, then press the combo you want.", "#6b7383");
+});
+
+hotkeyInput.addEventListener("keydown", async (e) => {
+  e.preventDefault();
+
+  // A modifier held alone isn't a usable combo yet — wait for a real
+  // key on top of it.
+  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+
+  const key = codeToAcceleratorKey(e.code);
+  if (!key) {
+    setHotkeyHint("That key can't be used as a shortcut here — try a letter, number, or function key.", "#e5484d");
+    return;
+  }
+
+  const modifiers = [];
+  if (e.ctrlKey || e.metaKey) modifiers.push("CommandOrControl");
+  if (e.altKey) modifiers.push("Alt");
+  if (e.shiftKey) modifiers.push("Shift");
+
+  if (modifiers.length === 0) {
+    setHotkeyHint("Include at least one modifier (Ctrl, Alt, or Shift) — a bare key would be captured everywhere, in every app.", "#e5484d");
+    return;
+  }
+
+  const accelerator = [...modifiers, key].join("+");
+  setHotkeyHint("Checking…", "#6b7383");
+
+  const result = await window.nyra.setHotkey(accelerator);
+  if (result.ok) {
+    hotkeyInput.value = accelerator;
+    setHotkeyHint("Saved — this hotkey is active now.", "#6fcf97");
+  } else {
+    setHotkeyHint(result.error || "That combo didn't register — try another.", "#e5484d");
+  }
+});
+
 chooseFolderButton.addEventListener("click", async () => {
   const folderPath = await window.nyra.chooseProjectFolder();
   if (folderPath) updateProjectFolderDisplay(folderPath);
@@ -111,6 +194,7 @@ async function loadSettings() {
   targetAgentSelect.value = settings.targetAgent || "";
   targetModelNameInput.value = settings.targetModelName || "";
   updateTargetModelField();
+  hotkeyInput.value = settings.hotkey || "";
   apiKeyInput.value = settings.apiKey || "";
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";
