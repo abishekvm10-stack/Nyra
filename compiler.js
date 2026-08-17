@@ -91,8 +91,14 @@ async function compilePrompt(rawText, settings, projectContext = "") {
   // UI collects agent + specific model as two separate fields (see
   // settings.html); combined here into one descriptive string since
   // getTargetModelGuidance() below only needs free text to match
-  // against, not a structured shape.
-  const targetModel = [targetAgent, targetModelName].filter(Boolean).join(" ").trim();
+  // against, not a structured shape. "Other" is a UI category label
+  // for "not in our list", not part of the description itself — the
+  // model name field is where the user typed the actual full name
+  // (e.g. "Grok 4"), so use that alone rather than prefixing "Other".
+  const targetModel =
+    targetAgent === "Other"
+      ? targetModelName
+      : [targetAgent, targetModelName].filter(Boolean).join(" ").trim();
 
   const model = MODEL_MAP[provider]?.[tier || "fast"];
   if (!model) throw new Error(`No model configured for ${provider} / ${tier}.`);
