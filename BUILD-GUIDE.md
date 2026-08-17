@@ -34,7 +34,7 @@ Current models used for Groq in this app: `openai/gpt-oss-20b` (fast tier) and `
    cd path\to\promptos-desktop
    npm install
    ```
-3. **Watch this step closely.** It installs Electron and `@nut-tree-fork/nut-js` (the keyboard-simulation library that makes Alt+P fully automatic). This is the step most likely to show an error, since it has a native component. If it fails, copy the exact error text — it usually points at a missing build tool, and there's a known fix for that.
+3. This installs Electron and the app's other dependencies.
 4. Once it finishes cleanly, start the app:
    ```
    npm start
@@ -52,10 +52,11 @@ Current models used for Groq in this app: `openai/gpt-oss-20b` (fast tier) and `
 
 1. Open **Notepad** (simplest possible test — no website quirks to worry about).
 2. Type a rough prompt: `write email about delayed package`
-3. Press **Alt+P**.
-4. Within a second or two, the text in Notepad should be replaced automatically with the structured Role/Context/Task/Constraints/Output Format version, and you'll see a small system notification confirming it compiled.
-5. **If that works**, repeat the same test inside a ChatGPT tab in your browser, then in VS Code's chat panel if you use one — same hotkey, same behavior, no extra setup, because none of this depends on which app you're in.
-6. **If nothing happens or you get an error notification**, tell me the exact wording and which step it happened at.
+3. Select it and copy it (**Ctrl+A**, then **Ctrl+C** — Cmd+A/Cmd+C on Mac). Nyra reads whatever's on the clipboard, so this step is required — it doesn't select or copy for you.
+4. Press **Alt+P** (Option+P on Mac).
+5. Within a second or two you'll see a system notification confirming it compiled. Press **Ctrl+V** (Cmd+V on Mac) to paste the structured Role/Context/Task/Constraints/Output Format version into Notepad.
+6. **If that works**, repeat the same test inside a ChatGPT tab in your browser, then in VS Code's chat panel if you use one — same copy → hotkey → paste steps, same behavior, no extra setup, because none of this depends on which app you're in.
+7. **If nothing happens or you get an error notification**, tell me the exact wording and which step it happened at.
 
 ---
 

@@ -20,16 +20,16 @@ The desktop app solves both: it operates on **whatever text field currently has 
 ## Architecture (current, desktop-first)
 ```
 User types a rough prompt in ANY app, focuses that text field
+   -> Selects it and copies it themselves (Ctrl+C / Cmd on Mac)
    -> Presses Alt+P (global hotkey, OS-level, not tied to any window)
-   -> Nyra simulates Ctrl+A / Ctrl+C (Cmd on Mac) to grab whatever's typed
-   -> Reads the clipboard, saves a backup copy (recoverable from the tray menu)
+   -> Nyra reads the clipboard, saves a backup copy (recoverable from the tray menu)
    -> Sends it to the chosen provider: one LLM call, using the same
       Role / Context / Task / Constraints / Output Format structure
       from the original sample
    -> Writes the compiled result to the clipboard
-   -> Simulates Ctrl+V (Cmd on Mac) to paste it back into the same field
+   -> User pastes it back into the same field themselves (Ctrl+V / Cmd on Mac)
 ```
-This keeps the core idea from the very first architecture discussion (one LLM call, IR-shaped output, adapter layer) — the "adapter" is no longer a per-site DOM script, it's the OS-level clipboard/keyboard layer, which is universal by construction.
+This keeps the core idea from the very first architecture discussion (one LLM call, IR-shaped output, adapter layer) — the "adapter" is no longer a per-site DOM script, it's the OS-level clipboard, which is universal by construction. (An earlier version tried to automate the copy/paste steps too via a keyboard-simulation library, but its simulated keystrokes weren't reliably reaching every app on Windows, so the current design keeps copy/paste manual and relies only on the clipboard, which has no such dependency.)
 
 ## Providers and tiers (implemented in `compiler.js` / the settings window)
 "Free and unlimited" from a hosted API provider doesn't really exist — every free tier researched enforces real rate limits (Groq: ~30 req/min, ~1,000 req/day; OpenRouter free models: 20 req/min, 50–1,000/day, plus a roster that rotates month to month). The only genuinely free-and-unlimited option is **self-hosted, open-weight inference** — cost becomes your own compute, not a per-request fee, with no external party to impose a limit.
@@ -45,7 +45,7 @@ Stated plainly: **free + unlimited + frontier-quality — pick two.** Local gets
 
 ### Phase 1 (in progress) — Desktop MVP
 - Electron app, tray/menu-bar icon, global hotkey (Alt+P).
-- Automatic select-all → copy → compile → paste loop via `@nut-tree/nut-js`.
+- Manual select → copy → hotkey → compile → paste loop via the OS clipboard (no keyboard-simulation library — see architecture note above).
 - Settings window: provider, tier, API key, Ollama URL.
 - Original prompt always recoverable (tray menu → "Restore last original prompt") even though the clipboard gets overwritten with the compiled version.
 - No daily cap, no call counter, anywhere in the pipeline — by design.

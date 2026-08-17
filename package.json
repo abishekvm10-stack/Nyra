@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.nyra.desktop",
     "productName": "Nyra",
-    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md"],
+    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md", "!MEMORY.md"],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
@@ -36,6 +36,7 @@
       "artifactName": "Nyra-${version}-${arch}.${ext}",
       "sign": null
     },
+    "afterSign": "build/afterSignHook.js",
     "publish": {
       "provider": "github",
       "owner": "abishekvml0-stack",

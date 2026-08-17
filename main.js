@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog, nativeImage } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
@@ -166,7 +166,14 @@ app.on("second-instance", () => {
 });
 
 function createTray() {
-  tray = new Tray(path.join(__dirname, "settings", "tray-icon.png"));
+  const trayIcon = nativeImage.createFromPath(
+    path.join(__dirname, "settings", "tray-icon.png")
+  );
+  // macOS menu-bar icons must be marked as template images so the OS renders
+  // them monochrome and adapts them to light/dark menu bars and click state;
+  // Windows/Linux trays render the icon's real colors and ignore this flag.
+  if (process.platform === "darwin") trayIcon.setTemplateImage(true);
+  tray = new Tray(trayIcon);
   tray.setToolTip("Nyra \u2014 Alt+P to compile whatever you're typing");
   rebuildTrayMenu();
 }

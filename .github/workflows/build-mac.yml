@@ -23,12 +23,11 @@ jobs:
       - name: Build macOS app
         run: npm run build:mac -- --universal --dir --publish never
 
-      - name: Ad-hoc sign the app
+      - name: Verify ad-hoc signature
         run: |
           APP=$(find dist -name 'Nyra.app' -type d -print -quit)
           echo "Found app at: $APP"
           test -n "$APP"
-          codesign --sign - --force --deep "$APP"
           codesign --verify --deep --verbose=2 "$APP"
           echo "App is signed successfully"
 
