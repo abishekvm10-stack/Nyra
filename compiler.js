@@ -85,8 +85,14 @@ const MODEL_MAP = {
 };
 
 async function compilePrompt(rawText, settings, projectContext = "") {
-  const { provider, tier, targetModel = "", apiKey, ollamaUrl, backendUrl } = settings;
+  const { provider, tier, targetAgent = "", targetModelName = "", apiKey, ollamaUrl, backendUrl } = settings;
   if (!provider) throw new Error("No provider selected. Open Settings first.");
+
+  // UI collects agent + specific model as two separate fields (see
+  // settings.html); combined here into one descriptive string since
+  // getTargetModelGuidance() below only needs free text to match
+  // against, not a structured shape.
+  const targetModel = [targetAgent, targetModelName].filter(Boolean).join(" ").trim();
 
   const model = MODEL_MAP[provider]?.[tier || "fast"];
   if (!model) throw new Error(`No model configured for ${provider} / ${tier}.`);

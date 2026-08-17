@@ -9,7 +9,19 @@ const MODEL_MAP = {
 
 const providerSelect = document.getElementById("provider");
 const tierSelect = document.getElementById("tier");
-const targetModelInput = document.getElementById("targetModel");
+const targetAgentSelect = document.getElementById("targetAgent");
+const targetModelNameInput = document.getElementById("targetModelName");
+const targetModelNameSuggestions = document.getElementById("targetModelNameSuggestions");
+
+// Just convenience suggestions per agent — always editable/free-text
+// regardless, so a model missing from this list (including ones that
+// don't exist yet) still works fine.
+const MODEL_SUGGESTIONS_BY_AGENT = {
+  Claude: ["Sonnet 5", "Opus 5", "Fable 5", "Haiku 4.5"],
+  ChatGPT: ["GPT-5", "GPT-4o", "o3"],
+  Gemini: ["Gemini 3 Pro", "Gemini 3 Flash"],
+};
+
 const apiKeyInput = document.getElementById("apiKey");
 const apiKeyField = document.getElementById("apiKeyField");
 const groqHint = document.getElementById("groqHint");
@@ -45,6 +57,22 @@ function updateModelPreview() {
   modelPreviewEl.textContent = model ? `Uses: ${model}` : "";
 }
 
+function updateTargetModelField() {
+  const agent = targetAgentSelect.value;
+  const suggestions = MODEL_SUGGESTIONS_BY_AGENT[agent] || [];
+  targetModelNameSuggestions.innerHTML = suggestions
+    .map((m) => `<option value="${m}"></option>`)
+    .join("");
+
+  const isGeneric = agent === "";
+  targetModelNameInput.disabled = isGeneric;
+  targetModelNameInput.placeholder = isGeneric
+    ? "Pick an agent above first"
+    : agent === "Other"
+    ? "Type the agent and model, e.g. “Grok 4”"
+    : "Pick a suggestion or type a model name…";
+}
+
 function updateProjectFolderDisplay(folderPath) {
   if (folderPath) {
     projectFolderPathEl.textContent = `Connected: ${folderPath}`;
@@ -61,6 +89,11 @@ providerSelect.addEventListener("change", () => {
 });
 tierSelect.addEventListener("change", updateModelPreview);
 
+targetAgentSelect.addEventListener("change", () => {
+  targetModelNameInput.value = "";
+  updateTargetModelField();
+});
+
 chooseFolderButton.addEventListener("click", async () => {
   const folderPath = await window.nyra.chooseProjectFolder();
   if (folderPath) updateProjectFolderDisplay(folderPath);
@@ -75,7 +108,9 @@ async function loadSettings() {
   const settings = await window.nyra.getSettings();
   providerSelect.value = settings.provider || "";
   tierSelect.value = settings.tier || "fast";
-  targetModelInput.value = settings.targetModel || "";
+  targetAgentSelect.value = settings.targetAgent || "";
+  targetModelNameInput.value = settings.targetModelName || "";
+  updateTargetModelField();
   apiKeyInput.value = settings.apiKey || "";
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";
@@ -87,7 +122,8 @@ async function loadSettings() {
 saveButton.addEventListener("click", async () => {
   const provider = providerSelect.value;
   const tier = tierSelect.value;
-  const targetModel = targetModelInput.value.trim();
+  const targetAgent = targetAgentSelect.value;
+  const targetModelName = targetModelNameInput.value.trim();
   const apiKey = apiKeyInput.value.trim();
   const ollamaUrl = ollamaUrlInput.value.trim() || "http://localhost:11434";
   const backendUrl = backendUrlInput.value.trim();
@@ -108,7 +144,7 @@ saveButton.addEventListener("click", async () => {
     return;
   }
 
-  await window.nyra.saveSettings({ provider, tier, targetModel, apiKey, ollamaUrl, backendUrl });
+  await window.nyra.saveSettings({ provider, tier, targetAgent, targetModelName, apiKey, ollamaUrl, backendUrl });
   statusEl.textContent = "Saved. Nyra is ready \u2014 Alt+P anywhere.";
   statusEl.style.color = "#6fcf97";
 });

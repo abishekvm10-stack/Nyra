@@ -27,24 +27,25 @@
   </select>
   <p class="hint" id="modelPreview"></p>
 
-  <label for="targetModel">Target model <span class="hint">(optional)</span></label>
-  <input id="targetModel" type="text" list="targetModelSuggestions" placeholder="e.g. Claude Sonnet 5, GPT-5, Gemini 3 Pro…" />
-  <datalist id="targetModelSuggestions">
-    <option value="Claude Sonnet 5"></option>
-    <option value="Claude Opus 5"></option>
-    <option value="Claude Fable 5"></option>
-    <option value="Claude Haiku 4.5"></option>
-    <option value="GPT-5"></option>
-    <option value="GPT-4o"></option>
-    <option value="Gemini 3 Pro"></option>
-    <option value="Gemini 3 Flash"></option>
-  </datalist>
+  <label for="targetAgent">AI agent <span class="hint">(optional)</span></label>
+  <select id="targetAgent">
+    <option value="">Generic (no specific agent)</option>
+    <option value="Claude">Claude (Anthropic)</option>
+    <option value="ChatGPT">ChatGPT (OpenAI)</option>
+    <option value="Gemini">Gemini (Google)</option>
+    <option value="Other">Other / not listed</option>
+  </select>
+
+  <label for="targetModelName">Model <span class="hint">(optional)</span></label>
+  <input id="targetModelName" type="text" list="targetModelNameSuggestions" />
+  <datalist id="targetModelNameSuggestions"></datalist>
   <p class="hint">
     Tailors phrasing and structure (e.g. XML tags for Claude, Markdown
-    for ChatGPT) to whichever model you'll paste the result into. Pick
-    a suggestion or type any model name, including ones not listed —
-    Nyra doesn't need to know about a model in advance to tune for it.
-    Leave blank for a generic, model-agnostic prompt.
+    for ChatGPT) to the exact agent/model you'll paste the result
+    into. Pick a suggestion or type any model name, including ones
+    not listed — Nyra doesn't need to know about a model in advance
+    to tune for it. Leave the model blank to tune for the agent only,
+    or leave both blank for a generic, model-agnostic prompt.
   </p>
 
   <div id="localFields" class="hidden">

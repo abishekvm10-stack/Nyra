@@ -81,7 +81,8 @@ function getSettings() {
   return {
     provider: store.get("provider", ""),
     tier: store.get("tier", "fast"),
-    targetModel: store.get("targetModel", ""),
+    targetAgent: store.get("targetAgent", ""),
+    targetModelName: store.get("targetModelName", ""),
     apiKey: store.get("apiKey", ""),
     ollamaUrl: store.get("ollamaUrl", "http://localhost:11434"),
     backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),
