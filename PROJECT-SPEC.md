@@ -10,12 +10,12 @@ The original plan (see "v1" history below) was a browser extension that injected
 1. **Publishing a Chrome extension costs a one-time $5 Chrome Web Store fee** and requires a review process. A desktop app has neither requirement.
 2. **A browser extension can only ever work inside a browser tab.** It can't reach VS Code, Word, or any other native app — and every "future AI model" would need its own site-specific adapter written and maintained as that site's HTML changes.
 
-The desktop app solves both: it operates on **whatever text field currently has focus**, using the operating system's own clipboard and keyboard-simulation layer, rather than reading any particular site's HTML. That means zero per-site code, and it works in literally anything with a text field — including apps that don't exist yet.
+The desktop app solves both: it operates on **whatever text field currently has focus**, using the operating system's own clipboard rather than reading any particular site's HTML. That means zero per-site code, and it works in literally anything with a text field — including apps that don't exist yet.
 
 ## What we are explicitly NOT doing
 - Not training a custom model. Every free-tier or paid option researched (Groq, OpenRouter, Ollama's model library, GPT/Claude/Gemini) already covers this need without training anything.
 - Not maintaining per-site DOM selectors as the primary path anymore — that fragility (sites changing their HTML) is exactly what the desktop pivot avoids.
-- Not building a hosted backend yet — the desktop app calls providers (or your local Ollama) directly; a backend is a Stage 6/later concern, only needed if you want to stop requiring users to bring their own API key.
+- Not requiring a hosted backend for every provider — Local/Groq/OpenAI/Anthropic/Gemini all still call providers (or your local Ollama) directly from the desktop app. The one exception is the optional **Nyra Cloud** provider (see below), a small proxy backend that now exists specifically so a friend can use Nyra with zero API key of their own.
 
 ## Architecture (current, desktop-first)
 ```
@@ -34,9 +34,10 @@ This keeps the core idea from the very first architecture discussion (one LLM ca
 ## Providers and tiers (implemented in `compiler.js` / the settings window)
 "Free and unlimited" from a hosted API provider doesn't really exist — every free tier researched enforces real rate limits (Groq: ~30 req/min, ~1,000 req/day; OpenRouter free models: 20 req/min, 50–1,000/day, plus a roster that rotates month to month). The only genuinely free-and-unlimited option is **self-hosted, open-weight inference** — cost becomes your own compute, not a per-request fee, with no external party to impose a limit.
 
-The resulting design, four providers, two tiers each:
-- **Local (Ollama)** — free, unlimited, quality capped only by your hardware. Fast: Llama 3.1 8B (or Qwen2.5 1.5B for lower-RAM machines). Quality: Qwen3 32B (needs decent hardware). **Not the current default while the app is being brought up** — planned as the next addition once the Groq path is confirmed solid.
-- **Groq** — free API key (no card), runs large models fast, but genuinely rate-limited — **this is the current active default provider**, chosen specifically to get the end-to-end loop (hotkey → compile → paste) working without also debugging a local model server at the same time. Uses `openai/gpt-oss-20b` (fast) and `qwen/qwen3.6-27b` (quality) — Groq deprecated its original Llama 3.1/3.3 models on June 17, 2026, so these are the current correct model names, not the ones originally planned.
+The resulting design, five providers, two tiers each where applicable:
+- **Nyra Cloud** — free, shared, **no API key needed at all**. A small proxy backend (`backend/`, deployed on Render, see `backend/README.md`) holds one Groq key privately and exposes a `/compile` endpoint; the desktop app just points `backendUrl` at it (`compiler.js`'s `callNyraCloud`). This is the first/default option in Settings — the lowest-friction way for someone besides the app's owner to try Nyra with zero setup. Same free-tier rate limits as Groq apply underneath, and Render's free instance sleeps after 15 min idle (~30-50s cold-start on first compile after a gap).
+- **Local (Ollama)** — free, unlimited, quality capped only by your hardware. Fast: Llama 3.1 8B (or Qwen2.5 1.5B for lower-RAM machines). Quality: Qwen3 32B (needs decent hardware). Not yet the out-of-the-box default — planned as a next addition alongside Nyra Cloud/Groq.
+- **Groq** — free API key (no card), runs large models fast, but genuinely rate-limited — the original active default before Nyra Cloud existed, still fully supported for anyone who wants their own key instead of the shared backend. Uses `openai/gpt-oss-20b` (fast) and `qwen/qwen3.6-27b` (quality) — Groq deprecated its original Llama 3.1/3.3 models on June 17, 2026, so these are the current correct model names, not the ones originally planned.
 - **OpenAI / Anthropic / Gemini** — paid, bring-your-own-key, frontier quality, high but real provider-side rate/spending limits.
 
 Stated plainly: **free + unlimited + frontier-quality — pick two.** Local gets free + unlimited at good-not-frontier quality (or great quality on strong hardware). Groq gets free + better quality at a real rate limit. Paid APIs get frontier quality + high limits at real cost.
@@ -50,7 +51,7 @@ Stated plainly: **free + unlimited + frontier-quality — pick two.** Local gets
 - Original prompt always recoverable (tray menu → "Restore last original prompt") even though the clipboard gets overwritten with the compiled version.
 - No daily cap, no call counter, anywhere in the pipeline — by design.
 
-**Current status:** code scaffold complete (`promptos-desktop/`), `npm install` succeeded, app confirmed running. **Currently configured with Groq as the active provider** (zero local setup, no Ollama service required) — this was a deliberate sequencing choice to get the end-to-end loop working before adding local-model complexity. Local (Ollama, Llama 3.1 8B / Qwen2.5 1.5B / Qwen3 32B) remains the free-and-truly-unlimited option and is planned as a next addition once Groq is confirmed solid, not abandoned.
+**Current status:** code scaffold complete (`promptos-desktop/`), `npm install` succeeded, app confirmed running on Windows (Mac launch currently broken — see `MEMORY.md` for the active signing/Gatekeeper investigation). **Nyra Cloud is now the default provider in Settings** (zero setup, no key needed, backed by the deployed `backend/` proxy) — Groq with your own key remains fully supported as an alternative. Local (Ollama, Llama 3.1 8B / Qwen2.5 1.5B / Qwen3 32B) remains the free-and-truly-unlimited option and is planned as a next addition, not abandoned.
 
 ### Phase 2 — Context from project files
 - Let users connect a folder / repo / doc set.
@@ -65,7 +66,7 @@ Stated plainly: **free + unlimited + frontier-quality — pick two.** Local gets
 
 ## Open decisions (deliberately left open, revisit with real usage data)
 - Final name (see shortlist below).
-- Default provider for new users: Local (zero cost, needs Ollama installed first) vs. Groq (zero setup, visible rate-limit caveat) as the out-of-the-box default.
+- ~~Default provider for new users~~ — resolved: Nyra Cloud (zero setup, no key) is now the out-of-the-box default, with Local/Groq/paid APIs as alternatives.
 - Whether the browser-extension path (Phase 3 above) is ever worth reviving as a parallel option.
 - Whether/when a custom model is ever worth training (only revisit if usage data shows off-the-shelf/local models are a real quality bottleneck — no evidence of this yet).
 

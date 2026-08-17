@@ -7,7 +7,9 @@ operates on whatever text field currently has focus, not on any
 particular site's code.
 
 ## Current status (what's actually running right now)
-**Provider: Groq** (`openai/gpt-oss-20b` fast / `qwen/qwen3.6-27b` quality) is what's configured and confirmed working. It needs no local model, no Ollama service, nothing else running in the background — just a free API key from console.groq.com. This was the deliberate choice to get the app itself fully working end-to-end first, without a local-model setup step in the way.
+**Provider: Nyra Cloud** is the default in Settings — free, shared, no API key needed at all. It works by pointing the app at a small proxy backend (`backend/`, deployed on Render) that holds one Groq key privately; see `backend/README.md` if you want to deploy your own instance. Since it's a free Render instance, the first compile after 15+ minutes idle takes ~30-50s to wake up, then it's fast.
+
+**Provider: Groq** (`openai/gpt-oss-20b` fast / `qwen/qwen3.6-27b` quality) remains fully supported if you'd rather use your own key instead of the shared backend — it needs no local model, no Ollama service, nothing else running in the background, just a free API key from console.groq.com.
 
 **Ollama (Local provider) is a planned future addition, not yet in active use.** The code path for it already exists (`compiler.js`'s `callLocal` function, and the Local option in Settings) — it's there and functional, just not the one currently configured. When you're ready to add it back in as a free/unlimited option alongside Groq, the plan is:
 - `llama3.1:8b` as an ultra-lightweight local fast tier (~6-8GB RAM), or
@@ -131,3 +133,6 @@ Electron.
 | The actual LLM call (all providers, local + hosted) | `compiler.js` |
 | Settings window UI | `settings/settings.html`, `settings.js` |
 | Fast vs. quality model names per provider | `MODEL_MAP` (top of `compiler.js`, mirrored in `settings.js`) |
+| Nyra Cloud's shared backend (deploy/redeploy instructions) | `backend/` (see `backend/README.md`) |
+| Packaging config (installer output, Mac ad-hoc signing hook) | `build` section of `package.json`, `build/afterSignHook.js` |
+| Running log of what's changed and what's still open | `MEMORY.md` |
