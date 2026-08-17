@@ -9,7 +9,7 @@ const MODEL_MAP = {
 
 const providerSelect = document.getElementById("provider");
 const tierSelect = document.getElementById("tier");
-const targetStyleSelect = document.getElementById("targetStyle");
+const targetModelInput = document.getElementById("targetModel");
 const apiKeyInput = document.getElementById("apiKey");
 const apiKeyField = document.getElementById("apiKeyField");
 const groqHint = document.getElementById("groqHint");
@@ -75,7 +75,7 @@ async function loadSettings() {
   const settings = await window.nyra.getSettings();
   providerSelect.value = settings.provider || "";
   tierSelect.value = settings.tier || "fast";
-  targetStyleSelect.value = settings.targetStyle || "generic";
+  targetModelInput.value = settings.targetModel || "";
   apiKeyInput.value = settings.apiKey || "";
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";
@@ -87,7 +87,7 @@ async function loadSettings() {
 saveButton.addEventListener("click", async () => {
   const provider = providerSelect.value;
   const tier = tierSelect.value;
-  const targetStyle = targetStyleSelect.value;
+  const targetModel = targetModelInput.value.trim();
   const apiKey = apiKeyInput.value.trim();
   const ollamaUrl = ollamaUrlInput.value.trim() || "http://localhost:11434";
   const backendUrl = backendUrlInput.value.trim();
@@ -108,7 +108,7 @@ saveButton.addEventListener("click", async () => {
     return;
   }
 
-  await window.nyra.saveSettings({ provider, tier, targetStyle, apiKey, ollamaUrl, backendUrl });
+  await window.nyra.saveSettings({ provider, tier, targetModel, apiKey, ollamaUrl, backendUrl });
   statusEl.textContent = "Saved. Nyra is ready \u2014 Alt+P anywhere.";
   statusEl.style.color = "#6fcf97";
 });

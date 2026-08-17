@@ -27,14 +27,25 @@
   </select>
   <p class="hint" id="modelPreview"></p>
 
-  <label for="targetStyle">Target style</label>
-  <select id="targetStyle">
-    <option value="generic">Generic (recommended)</option>
-    <option value="claude">Claude</option>
-    <option value="chatgpt">ChatGPT</option>
-    <option value="gemini">Gemini</option>
-  </select>
-  <p class="hint">Lightly adapts the compiled prompt to the style of the app you will paste it into.</p>
+  <label for="targetModel">Target model <span class="hint">(optional)</span></label>
+  <input id="targetModel" type="text" list="targetModelSuggestions" placeholder="e.g. Claude Sonnet 5, GPT-5, Gemini 3 Pro…" />
+  <datalist id="targetModelSuggestions">
+    <option value="Claude Sonnet 5"></option>
+    <option value="Claude Opus 5"></option>
+    <option value="Claude Fable 5"></option>
+    <option value="Claude Haiku 4.5"></option>
+    <option value="GPT-5"></option>
+    <option value="GPT-4o"></option>
+    <option value="Gemini 3 Pro"></option>
+    <option value="Gemini 3 Flash"></option>
+  </datalist>
+  <p class="hint">
+    Tailors phrasing and structure (e.g. XML tags for Claude, Markdown
+    for ChatGPT) to whichever model you'll paste the result into. Pick
+    a suggestion or type any model name, including ones not listed —
+    Nyra doesn't need to know about a model in advance to tune for it.
+    Leave blank for a generic, model-agnostic prompt.
+  </p>
 
   <div id="localFields" class="hidden">
     <label for="ollamaUrl">Ollama server URL</label>

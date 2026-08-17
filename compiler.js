@@ -29,15 +29,47 @@ actually relevant to the request. Never invent details that aren't in
 either the user's input or the provided project context, and ignore
 the project context entirely if it doesn't relate to the request.`;
 
-const TARGET_STYLE_GUIDANCE = {
-  generic: "Use a clear, model-agnostic style. Do not add target-specific syntax.",
-  claude: "The target is Claude. Keep the five labeled fields, and make each field's value clear and self-contained. Where structure inside a field helps, prefer simple XML-style tags such as <instructions> or <criteria>.",
-  chatgpt: "The target is ChatGPT. Keep the five labeled fields, use direct explicit instructions, and make requested output formatting easy to scan in Markdown.",
-  gemini: "The target is Gemini. Keep the five labeled fields, use concrete context and unambiguous step-by-step task instructions, and state the desired output plainly.",
-};
+// Hints for well-known model families, matched by substring against
+// whatever the user typed into the free-text "target model" field.
+// Deliberately NOT a list of every specific model (Sonnet 5, GPT-5,
+// etc.) — that list would need a code update every time a provider
+// ships or renames a model (this bit us once already with Groq's
+// Llama 3.1/3.3 deprecation). Family-level hints stay valid across
+// model versions, and getTargetModelGuidance() below falls back to
+// the compiling model's own knowledge for anything unrecognized,
+// including models that don't exist yet.
+const KNOWN_MODEL_FAMILY_HINTS = [
+  {
+    match: /claude/i,
+    hint: "This is a Claude-family model. It follows XML-style tags well (e.g. <instructions>, <context>, <criteria>) and handles nuanced, clearly-reasoned instructions gracefully. Keep the five labeled fields, and use such tags inside a field's value where it adds clarity.",
+  },
+  {
+    match: /gpt|chatgpt|openai|^o[1-9](\D|$)/i,
+    hint: "This is a GPT/ChatGPT-family model. It responds well to direct, explicit instructions and Markdown-formatted structure. Keep the five labeled fields, and make the Output Format field explicit about any Markdown structure expected in the response.",
+  },
+  {
+    match: /gemini/i,
+    hint: "This is a Gemini-family model. It benefits from concrete context and unambiguous, step-by-step task instructions stated plainly. Keep the five labeled fields, and spell out multi-step tasks as an explicit sequence.",
+  },
+  {
+    match: /llama|qwen|mistral|deepseek|phi-|ollama/i,
+    hint: "This is likely a smaller open-weight model. Favor short, explicit, unambiguous instructions over nuance or implication — don't rely on the model inferring intent it isn't told directly.",
+  },
+];
 
-function getSystemPrompt(targetStyle = "generic") {
-  return `${SYSTEM_PROMPT}\n\nTarget style guidance: ${TARGET_STYLE_GUIDANCE[targetStyle] || TARGET_STYLE_GUIDANCE.generic}`;
+function getTargetModelGuidance(targetModel) {
+  const trimmed = (targetModel || "").trim();
+  if (!trimmed || /^generic$/i.test(trimmed)) {
+    return "No specific target model was given — use a clear, model-agnostic style with no target-specific syntax.";
+  }
+  const known = KNOWN_MODEL_FAMILY_HINTS.find((f) => f.match.test(trimmed));
+  const base = `The compiled prompt is intended to be pasted into: ${trimmed}.`;
+  if (known) return `${base} ${known.hint}`;
+  return `${base} You may not have specific tuning data for this exact model — use your best general knowledge of how models in its likely family/lineage tend to behave (instruction style, structure preferences, verbosity), and fall back to universal structured-prompting best practices for anything uncertain.`;
+}
+
+function getSystemPrompt(targetModel) {
+  return `${SYSTEM_PROMPT}\n\nTarget model guidance: ${getTargetModelGuidance(targetModel)}`;
 }
 
 // Same tiering idea as the extension: local = free + unlimited
@@ -53,7 +85,7 @@ const MODEL_MAP = {
 };
 
 async function compilePrompt(rawText, settings, projectContext = "") {
-  const { provider, tier, targetStyle = "generic", apiKey, ollamaUrl, backendUrl } = settings;
+  const { provider, tier, targetModel = "", apiKey, ollamaUrl, backendUrl } = settings;
   if (!provider) throw new Error("No provider selected. Open Settings first.");
 
   const model = MODEL_MAP[provider]?.[tier || "fast"];
@@ -73,22 +105,22 @@ async function compilePrompt(rawText, settings, projectContext = "") {
   let result;
   switch (provider) {
     case "local":
-      result = await callLocal(userMessage, model, ollamaUrl, targetStyle);
+      result = await callLocal(userMessage, model, ollamaUrl, targetModel);
       break;
     case "nyra-cloud":
-      result = await callNyraCloud(userMessage, tier || "fast", backendUrl, targetStyle);
+      result = await callNyraCloud(userMessage, tier || "fast", backendUrl, targetModel);
       break;
     case "groq":
-      result = await callGroq(userMessage, model, apiKey, targetStyle);
+      result = await callGroq(userMessage, model, apiKey, targetModel);
       break;
     case "openai":
-      result = await callOpenAI(userMessage, model, apiKey, targetStyle);
+      result = await callOpenAI(userMessage, model, apiKey, targetModel);
       break;
     case "anthropic":
-      result = await callAnthropic(userMessage, model, apiKey, targetStyle);
+      result = await callAnthropic(userMessage, model, apiKey, targetModel);
       break;
     case "gemini":
-      result = await callGemini(userMessage, model, apiKey, targetStyle);
+      result = await callGemini(userMessage, model, apiKey, targetModel);
       break;
     default:
       throw new Error(`Unknown provider: ${provider}`);
@@ -100,12 +132,12 @@ async function compilePrompt(rawText, settings, projectContext = "") {
 // API key server-side, so people using Nyra don't need their own.
 // Shares Groq's free-tier rate limit across everyone using the same
 // backend \u2014 fine for a small group, not a substitute for real scale.
-async function callNyraCloud(rawText, tier, backendUrl, targetStyle) {
+async function callNyraCloud(rawText, tier, backendUrl, targetModel) {
   const url = `${backendUrl.replace(/\/$/, "")}/compile`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: rawText, tier, targetStyle }),
+    body: JSON.stringify({ text: rawText, tier, targetModel }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -124,7 +156,7 @@ function sanitizeCompiledText(text) {
   return trimmed.trim();
 }
 
-async function callLocal(rawText, model, baseUrl, targetStyle) {
+async function callLocal(rawText, model, baseUrl, targetModel) {
   const url = `${(baseUrl || "http://localhost:11434").replace(/\/$/, "")}/api/chat`;
   const res = await fetch(url, {
     method: "POST",
@@ -133,7 +165,7 @@ async function callLocal(rawText, model, baseUrl, targetStyle) {
       model,
       stream: false,
       messages: [
-        { role: "system", content: getSystemPrompt(targetStyle) },
+        { role: "system", content: getSystemPrompt(targetModel) },
         { role: "user", content: rawText },
       ],
     }),
@@ -145,14 +177,14 @@ async function callLocal(rawText, model, baseUrl, targetStyle) {
   return data.message.content.trim();
 }
 
-async function callGroq(rawText, model, apiKey, targetStyle) {
+async function callGroq(rawText, model, apiKey, targetModel) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
-        { role: "system", content: getSystemPrompt(targetStyle) },
+        { role: "system", content: getSystemPrompt(targetModel) },
         { role: "user", content: rawText },
       ],
     }),
@@ -165,14 +197,14 @@ async function callGroq(rawText, model, apiKey, targetStyle) {
   return data.choices[0].message.content.trim();
 }
 
-async function callOpenAI(rawText, model, apiKey, targetStyle) {
+async function callOpenAI(rawText, model, apiKey, targetModel) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
-        { role: "system", content: getSystemPrompt(targetStyle) },
+        { role: "system", content: getSystemPrompt(targetModel) },
         { role: "user", content: rawText },
       ],
     }),
@@ -182,7 +214,7 @@ async function callOpenAI(rawText, model, apiKey, targetStyle) {
   return data.choices[0].message.content.trim();
 }
 
-async function callAnthropic(rawText, model, apiKey, targetStyle) {
+async function callAnthropic(rawText, model, apiKey, targetModel) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -193,7 +225,7 @@ async function callAnthropic(rawText, model, apiKey, targetStyle) {
     body: JSON.stringify({
       model,
       max_tokens: 500,
-      system: getSystemPrompt(targetStyle),
+      system: getSystemPrompt(targetModel),
       messages: [{ role: "user", content: rawText }],
     }),
   });
@@ -202,14 +234,14 @@ async function callAnthropic(rawText, model, apiKey, targetStyle) {
   return data.content[0].text.trim();
 }
 
-async function callGemini(rawText, model, apiKey, targetStyle) {
+async function callGemini(rawText, model, apiKey, targetModel) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: getSystemPrompt(targetStyle) }] },
+        systemInstruction: { parts: [{ text: getSystemPrompt(targetModel) }] },
         contents: [{ parts: [{ text: rawText }] }],
       }),
     }

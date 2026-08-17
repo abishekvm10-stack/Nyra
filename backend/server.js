@@ -38,15 +38,45 @@ project files, labeled "Project context." Use those snippets to make
 the Context field specific and accurate, but only when relevant, and
 never invent details that aren't in what you were given.`;
 
-const TARGET_STYLE_GUIDANCE = {
-  generic: "Use a clear, model-agnostic style. Do not add target-specific syntax.",
-  claude: "The target is Claude. Keep the five labeled fields, and make each field's value clear and self-contained. Where structure inside a field helps, prefer simple XML-style tags such as <instructions> or <criteria>.",
-  chatgpt: "The target is ChatGPT. Keep the five labeled fields, use direct explicit instructions, and make requested output formatting easy to scan in Markdown.",
-  gemini: "The target is Gemini. Keep the five labeled fields, use concrete context and unambiguous step-by-step task instructions, and state the desired output plainly.",
-};
+// Hints for well-known model families, matched by substring against
+// whatever the desktop app sends as targetModel. Deliberately NOT a
+// list of every specific model version — that needs a redeploy every
+// time a provider ships/renames a model. Family-level hints stay
+// valid across versions; getTargetModelGuidance() falls back to the
+// compiling model's own knowledge for anything unrecognized,
+// including future models. Keep this in sync with compiler.js's copy.
+const KNOWN_MODEL_FAMILY_HINTS = [
+  {
+    match: /claude/i,
+    hint: "This is a Claude-family model. It follows XML-style tags well (e.g. <instructions>, <context>, <criteria>) and handles nuanced, clearly-reasoned instructions gracefully. Keep the five labeled fields, and use such tags inside a field's value where it adds clarity.",
+  },
+  {
+    match: /gpt|chatgpt|openai|^o[1-9](\D|$)/i,
+    hint: "This is a GPT/ChatGPT-family model. It responds well to direct, explicit instructions and Markdown-formatted structure. Keep the five labeled fields, and make the Output Format field explicit about any Markdown structure expected in the response.",
+  },
+  {
+    match: /gemini/i,
+    hint: "This is a Gemini-family model. It benefits from concrete context and unambiguous, step-by-step task instructions stated plainly. Keep the five labeled fields, and spell out multi-step tasks as an explicit sequence.",
+  },
+  {
+    match: /llama|qwen|mistral|deepseek|phi-|ollama/i,
+    hint: "This is likely a smaller open-weight model. Favor short, explicit, unambiguous instructions over nuance or implication — don't rely on the model inferring intent it isn't told directly.",
+  },
+];
 
-function getSystemPrompt(targetStyle = "generic") {
-  return `${SYSTEM_PROMPT}\n\nTarget style guidance: ${TARGET_STYLE_GUIDANCE[targetStyle] || TARGET_STYLE_GUIDANCE.generic}`;
+function getTargetModelGuidance(targetModel) {
+  const trimmed = (targetModel || "").trim();
+  if (!trimmed || /^generic$/i.test(trimmed)) {
+    return "No specific target model was given — use a clear, model-agnostic style with no target-specific syntax.";
+  }
+  const known = KNOWN_MODEL_FAMILY_HINTS.find((f) => f.match.test(trimmed));
+  const base = `The compiled prompt is intended to be pasted into: ${trimmed}.`;
+  if (known) return `${base} ${known.hint}`;
+  return `${base} You may not have specific tuning data for this exact model — use your best general knowledge of how models in its likely family/lineage tend to behave (instruction style, structure preferences, verbosity), and fall back to universal structured-prompting best practices for anything uncertain.`;
+}
+
+function getSystemPrompt(targetModel) {
+  return `${SYSTEM_PROMPT}\n\nTarget model guidance: ${getTargetModelGuidance(targetModel)}`;
 }
 
 const MODEL_MAP = {
@@ -73,7 +103,7 @@ app.get("/", (_req, res) => {
 });
 
 app.post("/compile", limiter, async (req, res) => {
-  const { text, tier, targetStyle, projectContext } = req.body || {};
+  const { text, tier, targetModel, projectContext } = req.body || {};
 
   if (!GROQ_API_KEY) {
     return res.status(500).json({ error: "Server misconfigured: GROQ_API_KEY not set." });
@@ -97,7 +127,7 @@ app.post("/compile", limiter, async (req, res) => {
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: getSystemPrompt(targetStyle) },
+          { role: "system", content: getSystemPrompt(targetModel) },
           { role: "user", content: userMessage },
         ],
       }),

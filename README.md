@@ -21,6 +21,8 @@ particular site's code.
 3. Nyra compiles it and puts the result back in your clipboard \u2014 you'll get a small notification when it's done.
 4. Press **Ctrl+V** in the same spot to paste the compiled version.
 
+**Optional: set a target model in Settings** (e.g. "Claude Sonnet 5", "GPT-5", "Gemini 3 Pro" — type anything, including models not in the suggestion list) and the compiled prompt's structure/phrasing gets tailored to that model's conventions, not just generic Role/Context/Task/Constraints/Output Format text.
+
 This uses only Electron's built-in clipboard API \u2014 no keyboard-simulation library, no native automation dependency, nothing that can fail silently depending on your machine's setup. An earlier version tried to automate the select/copy/paste steps too, but that required a third-party keyboard-simulation library whose simulated keystrokes didn't reliably reach Windows on every machine (no visible error, it just silently did nothing). This manual-keystroke version trades two extra keypresses for something that will actually work reliably everywhere.
 
 ## Requirements
@@ -134,5 +136,6 @@ Electron.
 | Settings window UI | `settings/settings.html`, `settings.js` |
 | Fast vs. quality model names per provider | `MODEL_MAP` (top of `compiler.js`, mirrored in `settings.js`) |
 | Nyra Cloud's shared backend (deploy/redeploy instructions) | `backend/` (see `backend/README.md`) |
+| Target-model prompt tuning (Claude/GPT/Gemini/local hints + fallback for unlisted models) | `compiler.js`'s `getTargetModelGuidance`, mirrored in `backend/server.js` |
 | Packaging config (installer output, Mac ad-hoc signing hook) | `build` section of `package.json`, `build/afterSignHook.js` |
 | Running log of what's changed and what's still open | `MEMORY.md` |
