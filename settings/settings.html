@@ -7,7 +7,7 @@
 </head>
 <body>
   <h1>Nyra</h1>
-  <p class="subtitle">Select text anywhere, Ctrl+C, then Alt+P to compile it.</p>
+  <p class="subtitle" id="subtitle">Select text anywhere, Ctrl+C, then Alt+P to compile it.</p>
 
   <label for="provider">Model provider</label>
   <select id="provider">
@@ -80,6 +80,25 @@
   <label for="hotkeyInput">Hotkey</label>
   <input id="hotkeyInput" type="text" readonly placeholder="Click, then press a key combo…" />
   <p class="hint" id="hotkeyHint">Click the field above, then press the combo you want.</p>
+
+  <hr />
+
+  <div id="automationSection">
+    <label>
+      <input id="automationEnabled" type="checkbox" />
+      Auto select, copy &amp; paste <span class="hint">(Windows, experimental)</span>
+    </label>
+    <p class="hint">
+      When on, the hotkey selects everything in the focused field,
+      copies it, compiles it, and pastes the result back automatically
+      &mdash; no manual Ctrl+C/Ctrl+V. Off by default: test it first.
+      Skips anything over ~8,000 characters (that's a document, not a
+      prompt) rather than risk replacing it.
+    </p>
+    <button id="testAutomation" class="secondary">Test automation&hellip;</button>
+    <p class="hint" id="automationTestResult"></p>
+  </div>
+  <p class="hint hidden" id="automationUnavailableHint">Automation isn't available on this platform yet &mdash; use the manual Ctrl+C / hotkey / Ctrl+V flow above.</p>
 
   <hr />
 

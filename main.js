@@ -4,6 +4,7 @@ const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
 const { compilePrompt } = require("./compiler");
 const { getRelevantContext } = require("./context");
+const automation = require("./automation");
 
 // Prevent a second copy of Nyra from ever running alongside an older
 // one. Without this, two instances can both try to register Alt+P,
@@ -92,6 +93,8 @@ function getSettings() {
     provider: store.get("provider", ""),
     tier: store.get("tier", "fast"),
     hotkey: currentHotkey(),
+    automationEnabled: store.get("automationEnabled", false),
+    platform: process.platform,
     targetAgent: store.get("targetAgent", ""),
     targetModelName: store.get("targetModelName", ""),
     apiKey: store.get("apiKey", ""),
@@ -131,6 +134,28 @@ function registerHotkey(accelerator) {
   return { ok: false, error };
 }
 
+const AUTOMATION_MAX_CHARS = 8000; // above this it's a document, not a prompt
+const AUTOMATION_POLL_INTERVAL_MS = 50;
+const AUTOMATION_POLL_TIMEOUT_MS = 800;
+
+// Polls the clipboard until it differs from `sentinel`, or gives up
+// after `timeoutMs`. A unique sentinel (not just "was it empty") is
+// what lets this tell "the copy genuinely landed" apart from "the
+// clipboard already happened to hold this exact text."
+async function waitForClipboardChange(sentinel, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const current = clipboard.readText();
+    if (current !== sentinel) return current;
+    await new Promise((resolve) => setTimeout(resolve, AUTOMATION_POLL_INTERVAL_MS));
+  }
+  return null;
+}
+
+function automationUsable(settings) {
+  return Boolean(settings.automationEnabled) && process.platform === "win32" && automation.isAvailable();
+}
+
 async function handleHotkey() {
   const settings = getSettings();
   if (!settings.provider) {
@@ -138,13 +163,42 @@ async function handleHotkey() {
     return;
   }
 
-  // Manual flow: select text and Ctrl+C yourself first, then Alt+P.
-  // (An earlier version tried to simulate Ctrl+A/Ctrl+C/Ctrl+V
-  // automatically via a keyboard-automation library, but that
-  // library's simulated keystrokes weren't reliably reaching Windows
-  // on every machine \u2014 clipboard read/write has no such dependency
-  // and just works everywhere, so this is the more robust design.)
-  const rawText = clipboard.readText().trim();
+  const useAutomation = automationUsable(settings);
+  let rawText;
+
+  if (useAutomation) {
+    const sentinel = `__nyra_sentinel_${Date.now()}__`;
+    clipboard.writeText(sentinel);
+
+    try {
+      await automation.selectAllAndCopy();
+    } catch (err) {
+      notify("Nyra \u2014 automation error", String(err.message || err));
+      return;
+    }
+
+    const captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
+    if (captured === null) {
+      notify(
+        "Nyra",
+        "Nothing was captured \u2014 the focused app may be running as administrator (Windows blocks synthetic input into elevated windows), or nothing was focused. Select your text and press Ctrl+C manually instead."
+      );
+      return;
+    }
+
+    rawText = captured.trim();
+
+    if (rawText.length > AUTOMATION_MAX_CHARS) {
+      notify(
+        "Nyra",
+        `Selected text was ${rawText.length} characters \u2014 that looks like a whole document, not a prompt, so nothing was changed. Select just your prompt and try again.`
+      );
+      return;
+    }
+  } else {
+    // Manual flow: select text and Ctrl+C yourself first, then the hotkey.
+    rawText = clipboard.readText().trim();
+  }
 
   if (!rawText) {
     notify("Nyra", `Copy some text first (Ctrl+C), then press ${currentHotkey()}.`);
@@ -162,10 +216,93 @@ async function handleHotkey() {
       : "";
     const compiled = await compilePrompt(rawText, settings, projectContext);
     clipboard.writeText(compiled);
-    notify("Nyra", "Compiled \u2014 press Ctrl+V to paste it.");
+
+    if (useAutomation) {
+      try {
+        await automation.paste();
+        notify("Nyra", "Compiled and pasted.");
+      } catch (err) {
+        // Graceful degradation to today's manual behavior \u2014 the
+        // compiled text is still on the clipboard either way.
+        notify("Nyra", `Compiled \u2014 press Ctrl+V to paste it. (Auto-paste failed: ${String(err.message || err)})`);
+      }
+    } else {
+      notify("Nyra", "Compiled \u2014 press Ctrl+V to paste it.");
+    }
   } catch (err) {
     clipboard.writeText(rawText); // put the original back so nothing is lost
     notify("Nyra \u2014 error", String(err.message || err));
+  }
+}
+
+// The diagnostic that was missing last time automation broke: a real
+// end-to-end test against a known value, with a specific reason on
+// failure, instead of "it just doesn't work" discovered days later in
+// some random chat box.
+async function runAutomationSelfTest() {
+  if (process.platform !== "win32") {
+    return { ok: false, reason: "Automation is Windows-only right now." };
+  }
+  if (!automation.isAvailable()) {
+    return { ok: false, reason: automation.unavailableReason() || "Automation engine failed to load." };
+  }
+
+  const knownText = `nyra-self-test-${Date.now()}`;
+  const testWindow = new BrowserWindow({
+    width: 320,
+    height: 120,
+    resizable: false,
+    title: "Nyra automation test",
+    webPreferences: { contextIsolation: true },
+  });
+  testWindow.setMenuBarVisibility(false);
+
+  const html = `<!DOCTYPE html><html><body style="margin:0;font-family:sans-serif;background:#14161c;color:#e6e8ec;">
+    <input id="t" style="width:100%;box-sizing:border-box;padding:12px;font-size:14px;" value="${knownText}" />
+    <script>document.getElementById("t").focus(); document.getElementById("t").select();</script>
+  </body></html>`;
+
+  try {
+    await testWindow.loadURL(`data:text/html,${encodeURIComponent(html)}`);
+    // nut-js sends OS-level input to whatever window the OS currently
+    // has in the foreground, which is a different thing from in-page
+    // DOM focus — explicitly claim it rather than assuming Electron's
+    // default show/focus behavior is enough.
+    testWindow.show();
+    testWindow.focus();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const sentinel = `__nyra_test_sentinel_${Date.now()}__`;
+    clipboard.writeText(sentinel);
+    await automation.selectAllAndCopy();
+
+    const captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
+    if (captured === null) {
+      return {
+        ok: false,
+        reason: "Keystrokes were sent but nothing was captured — Windows may be blocking synthetic input (this can happen if Nyra needs administrator rights to reach the focused window).",
+      };
+    }
+    if (captured.trim() !== knownText) {
+      return { ok: false, reason: `Captured text didn't match what was expected (got "${captured.trim()}") — something intercepted or altered the keystrokes.` };
+    }
+
+    // Prove paste works too, not just copy — they use different code
+    // paths and either can fail independently.
+    const pasteCheck = `nyra-paste-check-${Date.now()}`;
+    clipboard.writeText(pasteCheck);
+    await automation.paste();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const pasted = await testWindow.webContents.executeJavaScript('document.getElementById("t").value');
+    if (pasted !== pasteCheck) {
+      return { ok: false, reason: "Copy works but paste didn't land — auto-paste may fail in real use; you can still paste manually with Ctrl+V after compiling." };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err.message || err) };
+  } finally {
+    testWindow.destroy();
   }
 }
 
@@ -300,6 +437,7 @@ ipcMain.handle("nyra:set-hotkey", (_event, accelerator) => {
   }
   return result;
 });
+ipcMain.handle("nyra:test-automation", () => runAutomationSelfTest());
 ipcMain.handle("nyra:choose-project-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   if (result.canceled || !result.filePaths.length) return null;

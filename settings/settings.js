@@ -35,8 +35,14 @@ const modelPreviewEl = document.getElementById("modelPreview");
 const chooseFolderButton = document.getElementById("chooseFolder");
 const clearFolderButton = document.getElementById("clearFolder");
 const projectFolderPathEl = document.getElementById("projectFolderPath");
+const subtitleEl = document.getElementById("subtitle");
 const hotkeyInput = document.getElementById("hotkeyInput");
 const hotkeyHint = document.getElementById("hotkeyHint");
+const automationSection = document.getElementById("automationSection");
+const automationUnavailableHint = document.getElementById("automationUnavailableHint");
+const automationEnabledCheckbox = document.getElementById("automationEnabled");
+const testAutomationButton = document.getElementById("testAutomation");
+const automationTestResultEl = document.getElementById("automationTestResult");
 
 // Named keys accelerators accept beyond plain letters/digits/function
 // keys. Anything not covered here (punctuation, media keys, etc.)
@@ -74,6 +80,13 @@ function codeToAcceleratorKey(code) {
 function setHotkeyHint(text, color) {
   hotkeyHint.textContent = text;
   hotkeyHint.style.color = color;
+}
+
+function updateSubtitle() {
+  const hotkey = hotkeyInput.value || "your hotkey";
+  subtitleEl.textContent = automationEnabledCheckbox.checked
+    ? `Select text anywhere, press ${hotkey} — it compiles and pastes automatically.`
+    : `Select text anywhere, Ctrl+C, then ${hotkey} to compile it.`;
 }
 
 function updateFieldVisibility() {
@@ -172,8 +185,28 @@ hotkeyInput.addEventListener("keydown", async (e) => {
   if (result.ok) {
     hotkeyInput.value = accelerator;
     setHotkeyHint("Saved — this hotkey is active now.", "#6fcf97");
+    updateSubtitle();
   } else {
     setHotkeyHint(result.error || "That combo didn't register — try another.", "#e5484d");
+  }
+});
+
+automationEnabledCheckbox.addEventListener("change", updateSubtitle);
+
+testAutomationButton.addEventListener("click", async () => {
+  automationTestResultEl.textContent = "Testing… don't touch the keyboard for a moment.";
+  automationTestResultEl.style.color = "#6b7383";
+  testAutomationButton.disabled = true;
+
+  const result = await window.nyra.testAutomation();
+  testAutomationButton.disabled = false;
+
+  if (result.ok) {
+    automationTestResultEl.textContent = "Passed — automation works on this machine.";
+    automationTestResultEl.style.color = "#6fcf97";
+  } else {
+    automationTestResultEl.textContent = `Failed: ${result.reason}`;
+    automationTestResultEl.style.color = "#e5484d";
   }
 });
 
@@ -195,6 +228,13 @@ async function loadSettings() {
   targetModelNameInput.value = settings.targetModelName || "";
   updateTargetModelField();
   hotkeyInput.value = settings.hotkey || "";
+
+  const automationSupported = settings.platform === "win32";
+  automationSection.classList.toggle("hidden", !automationSupported);
+  automationUnavailableHint.classList.toggle("hidden", automationSupported);
+  automationEnabledCheckbox.checked = automationSupported && Boolean(settings.automationEnabled);
+  updateSubtitle();
+
   apiKeyInput.value = settings.apiKey || "";
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";
@@ -208,6 +248,7 @@ saveButton.addEventListener("click", async () => {
   const tier = tierSelect.value;
   const targetAgent = targetAgentSelect.value;
   const targetModelName = targetModelNameInput.value.trim();
+  const automationEnabled = automationEnabledCheckbox.checked;
   const apiKey = apiKeyInput.value.trim();
   const ollamaUrl = ollamaUrlInput.value.trim() || "http://localhost:11434";
   const backendUrl = backendUrlInput.value.trim();
@@ -228,8 +269,9 @@ saveButton.addEventListener("click", async () => {
     return;
   }
 
-  await window.nyra.saveSettings({ provider, tier, targetAgent, targetModelName, apiKey, ollamaUrl, backendUrl });
-  statusEl.textContent = "Saved. Nyra is ready \u2014 Alt+P anywhere.";
+  await window.nyra.saveSettings({ provider, tier, targetAgent, targetModelName, automationEnabled, apiKey, ollamaUrl, backendUrl });
+  updateSubtitle();
+  statusEl.textContent = `Saved. Nyra is ready \u2014 ${hotkeyInput.value || "your hotkey"} anywhere.`;
   statusEl.style.color = "#6fcf97";
 });
 

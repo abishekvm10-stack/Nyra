@@ -16,14 +16,19 @@ particular site's code.
 - `qwen2.5:1.5b` as an even lighter option (~1.5-2.5GB RAM) for lower-spec machines, added as a third rung between the two.
 
 ## How it works, day to day
+
+**Manual mode (default, works everywhere):**
 1. Select your rough prompt anywhere (a ChatGPT tab, VS Code's chat panel, wherever), press **Ctrl+C**.
-2. Press **Alt+P**.
+2. Press your hotkey (**Alt+P** by default — configurable in Settings).
 3. Nyra compiles it and puts the result back in your clipboard \u2014 you'll get a small notification when it's done.
 4. Press **Ctrl+V** in the same spot to paste the compiled version.
 
-**Optional: pick an AI agent (and model) in Settings** — e.g. Claude → Sonnet 5, ChatGPT → GPT-5, or "Other" and type anything not listed — and the compiled prompt's structure/phrasing gets tailored to that agent/model's conventions, not just generic Role/Context/Task/Constraints/Output Format text.
+**Automatic mode (Windows, opt-in, off by default):** turn on "Auto select, copy & paste" in Settings, and steps 1/4 disappear — just select your text and press the hotkey once. This existed before and was removed for reliability reasons (see below); it's back, built around the actual root cause of the original failure, but it's new enough that you should run **Test automation…** in Settings before relying on it, and it still won't touch anything over ~8,000 selected characters (a document, not a prompt) as a safety guard.
 
-This uses only Electron's built-in clipboard API \u2014 no keyboard-simulation library, no native automation dependency, nothing that can fail silently depending on your machine's setup. An earlier version tried to automate the select/copy/paste steps too, but that required a third-party keyboard-simulation library whose simulated keystrokes didn't reliably reach Windows on every machine (no visible error, it just silently did nothing). This manual-keystroke version trades two extra keypresses for something that will actually work reliably everywhere.
+**Optional either way: pick an AI agent (and model) in Settings** — e.g. Claude → Sonnet 5, ChatGPT → GPT-5, or "Other" and type anything not listed — and the compiled prompt's structure/phrasing gets tailored to that agent/model's conventions, not just generic Role/Context/Task/Constraints/Output Format text.
+
+### Why automatic mode was removed once, and what's different now
+An earlier version simulated Ctrl+A/Ctrl+C/Ctrl+V automatically, but the keystrokes didn't reliably reach Windows on every machine — no visible error, it just silently did nothing. The actual cause: the global hotkey fires while you're still physically holding its modifier key down (e.g. Alt in Alt+P), so a keystroke sent immediately afterward arrives as `Alt+Ctrl+C` instead of `Ctrl+C`, and the OS ignores it. The current implementation (`automation.js`) explicitly releases all modifier keys before sending anything, verifies the clipboard actually changed before proceeding (rather than assuming), and ships a **Test automation** button in Settings specifically so a silent failure like the original one gets caught in ten seconds instead of days later in some random chat box. Manual mode remains the default and the permanent fallback — automatic mode is opt-in, not a replacement.
 
 ## Requirements
 - [Node.js](https://nodejs.org) installed (LTS version is fine).
@@ -118,10 +123,8 @@ Electron.
 - **Replace the placeholder tray icon** (`settings/tray-icon.png`)
   before sharing this with anyone else \u2014 it's a generated stand-in.
 - **Hotkey is configurable** (Settings → click the Hotkey field, then press a combo) — defaults to Alt+P. Needs at least one modifier (Ctrl/Alt/Shift); if a saved combo stops working (e.g. another app claims it between sessions), Nyra falls back to Alt+P automatically and tells you.
-- **You select the text yourself now** (Ctrl+C before, Ctrl+V after) \u2014
-  this is a deliberate simplification after the automatic version
-  proved unreliable, not a regression to fix later.
-- **No project-file context yet** \u2014 this only works on whatever's in
+- **Manual mode is still the default** (Ctrl+C before, hotkey, Ctrl+V after) — automatic select/copy/paste exists now (Windows, opt-in in Settings) but is new enough to want real-world mileage before it becomes the default.
+- **No project-file context yet** — this only works on whatever's in
   the focused field.
 - **Can't be tested inside this sandbox** \u2014 it needs a real desktop
   with a display, global hotkey support, and OS-level input
@@ -131,6 +134,7 @@ Electron.
 | What | File |
 |---|---|
 | Tray icon, hotkey, select/copy/compile/paste loop | `main.js` |
+| Automatic select/copy/paste engine (Windows), self-test harness | `automation.js`, `runAutomationSelfTest()` in `main.js` |
 | The actual LLM call (all providers, local + hosted) | `compiler.js` |
 | Settings window UI | `settings/settings.html`, `settings.js` |
 | Fast vs. quality model names per provider | `MODEL_MAP` (top of `compiler.js`, mirrored in `settings.js`) |

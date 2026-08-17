@@ -9,6 +9,7 @@
     "build:mac": "electron-builder --mac"
   },
   "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9"
   },
@@ -20,6 +21,7 @@
     "appId": "com.nyra.desktop",
     "productName": "Nyra",
     "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md", "!MEMORY.md"],
+    "asarUnpack": ["**/node_modules/@nut-tree-fork/**/*", "**/node_modules/@nut-tree/**/*"],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
