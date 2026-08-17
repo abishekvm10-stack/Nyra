@@ -6,7 +6,16 @@ Read this before starting new work on this project; update it after every meanin
 Electron tray/menu-bar app ("Nyra", package name `nyra-desktop`). User copies text anywhere, presses a global hotkey (Alt+P), Nyra reads the clipboard, sends it to an LLM provider (Groq/OpenAI/Anthropic/Gemini/local Ollama, see `compiler.js`) to "compile" it into a structured Role/Context/Task/Constraints/Output-Format prompt, writes the result back to the clipboard for the user to paste. Targets both Windows and Mac from one codebase (`electron-builder`, `npm run build:win` / `build:mac`).
 
 ## Current status
-Windows build confirmed working (`npm run build:win` succeeds, produces `dist/win-unpacked/Nyra.exe` + NSIS installer). Mac build was previously fully unsigned and hard-blocked by Gatekeeper on Apple Silicon ("The application 'Nyra' can't be opened", no override) — fixed this session via an `afterSign` ad-hoc-signing hook wired into `package.json`, so every Mac build path (local `npm run build:mac`, `build-mac.yml`, `release.yml`) signs automatically now. Not yet verified on an actual Mac (no macOS machine available in this session) — next real Mac build (manual `build-mac.yml` run or a new `v*` tag push) should be checked for: (1) app opens without the hard Gatekeeper block — the milder "unidentified developer, right-click → Open" prompt is expected and fine, (2) tray icon renders correctly (monochrome, adapts to light/dark menu bar) instead of the old oversized/wrong-colored icon.
+Windows build confirmed working (`npm run build:win` succeeds, produces `dist/win-unpacked/Nyra.exe` + NSIS installer).
+
+Mac build is **still broken in practice, unresolved** — this is the active open problem. Timeline:
+1. Root cause found: `release.yml` never signed the Mac build at all (see changelog below); fixed via an `afterSign` ad-hoc-signing hook in `package.json`, committed/pushed (`27aeb53`, `ba25a4c` on `main`).
+2. User (prem, on a MacBook, user account `prem`, hostname `PremMacBook`) manually ran `build-mac.yml` via the Actions tab → **run succeeded** (run #14, commit `ba25a4c`, "Verify ad-hoc signature" step passed, i.e. `codesign --verify` was clean on the raw `--dir` build output on the CI runner, before zip/dmg packaging).
+3. User downloaded the `Nyra-macOS` artifact (`Nyra-macOS (4).zip` — this is GitHub's own outer artifact wrapper, containing `Nyra.dmg` + `Nyra.zip` inside it) and tried opening the app from the mounted dmg.
+4. **Still got the exact same bare "The application 'Nyra' can't be opened." dialog (OK button only, no override)** — identical to the original pre-fix symptom.
+5. Checked System Settings → Privacy & Security for the usual "'Nyra' was blocked... Open Anyway" override entry that normally appears after a Gatekeeper-blocked launch attempt — **it was not there**. This is the important clue: it means the OS likely isn't even getting far enough to log a Gatekeeper policy block: this doesn't look like a "just needs notarization" issue, it looks like the app bundle itself may not be intact/valid by the time it reaches the user's Mac.
+6. **Working theory (unconfirmed)**: the CI's `codesign --verify` only checked the app in its raw `--dir` output, *before* it gets packaged into `.dmg`/`.zip` by the workflow's own `hdiutil`/`zip` steps and *before* GitHub's artifact upload/download wraps it again. Something in that chain (packaging, or GitHub artifact roundtrip, or the nested-zip extraction on the user's end) may be corrupting the bundle or invalidating the signature in a way CI never tested. Needs terminal-level diagnosis on the actual Mac to confirm or rule out.
+7. Started terminal diagnostics on the Mac to get a precise OS-level answer (`file`, `xattr -l`, `codesign -dv --verbose=4`, `codesign --verify --deep --strict --verbose=4`, `spctl -a -vvv`) — **got sidetracked**: `cd /Volumes/Nyra` failed because the dmg wasn't mounted in that terminal session, so the subsequent commands accidentally ran against `~` (home dir) instead of the real app path. User confirmed the actual downloaded files are sitting in `~/Downloads`. **Paused here at user's request** — resume by running `ls -la ~/Downloads` on the Mac to find the exact file/folder names, then `cd`/mount to the real `Nyra.app` path and re-run the diagnostic commands above against it.
 
 ## Changelog (most recent first)
 - 2026-08-17: Diagnosed and fixed the Mac "can't be opened" launch failure.
@@ -19,9 +28,18 @@ Windows build confirmed working (`npm run build:win` succeeds, produces `dist/wi
   - Windows-side code/config untouched throughout — no changes needed there.
 
 ## Planned / open
+- **ACTIVE BUG, next thing to do**: Mac app still won't open despite CI-verified signing (see Current status above). Next concrete step: on the Mac, run `ls -la ~/Downloads`, locate the real `Nyra.app` (inside the mounted `Nyra.dmg` or wherever it was extracted/dragged to), then run:
+  ```
+  file Nyra.app/Contents/MacOS/Nyra
+  xattr -l Nyra.app
+  codesign -dv --verbose=4 Nyra.app
+  codesign --verify --deep --strict --verbose=4 Nyra.app
+  spctl -a -vvv Nyra.app
+  ```
+  and read back the output. That will show definitively whether the binary/bundle is intact (right architecture(s), valid Mach-O), whether a signature is actually present on the file the user has, and Gatekeeper's exact verdict/reason — needed to distinguish "bundle got corrupted somewhere in packaging/download" from "policy issue" from something else not yet considered.
+- If diagnostics show the signature/bundle is fine but Gatekeeper still hard-blocks with no override shown in Privacy & Security: worth checking whether this Mac is on macOS Sequoia/26 with even stricter first-run enforcement than expected, and whether notarization (real Apple Developer Program membership, $99/yr, `xcrun notarytool`) is actually required now rather than ad-hoc signing being sufficient — ad-hoc signing was assumed sufficient based on `build-mac.yml`'s git history (commits `32bb0a6` etc.) but that history doesn't prove an *end user's downloaded copy* was ever actually tested opening on a real Mac, only that CI's own signing step succeeded.
 - Generate a real `build/icon.icns` from proper source artwork (needs a ~1024x1024 source image, not currently available — app ships with Electron's default icon on Mac until then). Skipped deliberately this round per user.
 - No current plan to reintroduce automatic keystroke simulation (nut-js or otherwise) — current clipboard-only design was a deliberate reliability fix, not an oversight. Revisit only if manual copy/paste proves to be a real usability problem in practice.
-- **Still needs verification**: fix is committed and pushed (`27aeb53` on `main`, 2026-08-17) but not yet confirmed on real macOS. No `gh` CLI or GitHub token available in this dev environment, so the user needs to manually run `build-mac.yml` via the Actions tab (or push a `v*` tag for `release.yml`) and check the "Verify ad-hoc signature" step passes, then test the downloaded app actually opens on their Mac without the Gatekeeper hard-block.
 
 ## Open questions for the user
-- None outstanding right now.
+- None outstanding right now — mid-diagnosis, paused per user's request to continue later.
