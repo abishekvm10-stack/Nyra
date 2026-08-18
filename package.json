@@ -1,6 +1,6 @@
 {
   "name": "nyra-desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
   "main": "main.js",
   "scripts": {
@@ -41,7 +41,7 @@
     "afterSign": "build/afterSignHook.js",
     "publish": {
       "provider": "github",
-      "owner": "abishekvml0-stack",
+      "owner": "abishekvm10-stack",
       "repo": "Nyra",
       "releaseType": "release"
     }
