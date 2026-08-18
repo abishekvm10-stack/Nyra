@@ -3,17 +3,17 @@
 }
 
 :root {
-  --bg-app: #100c14;
-  --bg-surface: #18131d;
-  --bg-raised: #201925;
-  --border: #2b2233;
-  --border-strong: #3c3044;
-  --text: #ece7f0;
-  --text-dim: #a89bb0;
-  --text-muted: #6e6277;
-  --accent: #ad3d84;
-  --accent-hover: #c8529b;
-  --accent-tint: rgba(173, 61, 132, 0.16);
+  --bg-app: #0b0a16;
+  --bg-surface: #13111f;
+  --bg-raised: #1b1830;
+  --border: #262242;
+  --border-strong: #382f57;
+  --text: #e9e6f2;
+  --text-dim: #a49dc2;
+  --text-muted: #676083;
+  --accent: #5c1e7a;
+  --accent-hover: #7a30a0;
+  --accent-tint: rgba(92, 30, 122, 0.22);
   --ok: #6fcf97;
   --warn: #f2c94c;
   --danger: #e5484d;
