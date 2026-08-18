@@ -1,6 +1,6 @@
 {
   "name": "nyra-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,17 @@
     "asarUnpack": ["**/node_modules/@nut-tree-fork/**/*", "**/node_modules/@nut-tree/**/*"],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "files": [
+        "**/*",
+        "!README.md",
+        "!BUILD-GUIDE.md",
+        "!PROJECT-SPEC.md",
+        "!MEMORY.md",
+        "!tools/**",
+        "!node_modules/@nut-tree-fork/libnut-darwin/**",
+        "!node_modules/@nut-tree-fork/libnut-linux/**"
+      ]
     },
     "nsis": {
       "artifactName": "${productName}-Setup-${version}.${ext}",
@@ -45,8 +55,8 @@
         "!PROJECT-SPEC.md",
         "!MEMORY.md",
         "!tools/**",
-        "!node_modules/@nut-tree-fork/**",
-        "!node_modules/@nut-tree/**"
+        "!node_modules/@nut-tree-fork/libnut-win32/**",
+        "!node_modules/@nut-tree-fork/libnut-linux/**"
       ]
     },
     "afterSign": "build/afterSignHook.js",

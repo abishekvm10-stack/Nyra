@@ -46,7 +46,7 @@
           <div class="row">
             <div class="row-label">
               <span class="row-title">Auto select, copy &amp; paste</span>
-              <span class="row-sub">Windows &middot; one keypress, no Ctrl+C/V</span>
+              <span class="row-sub" id="automationSectionSub">One keypress, no Ctrl+C/V</span>
             </div>
             <div class="row-control">
               <label class="toggle">
@@ -60,6 +60,24 @@
             Skips anything over ~8,000 characters (that's a document, not a
             prompt) rather than risk replacing it.
           </p>
+          <div class="row hidden" id="accessibilityRow">
+            <div class="row-label">
+              <span class="row-title">Accessibility access needed</span>
+              <span class="row-sub" id="accessibilityStatusText">macOS requires this to send keystrokes to other apps</span>
+            </div>
+            <div class="row-control">
+              <button id="grantAccessibility" class="btn-secondary" type="button">Grant access&hellip;</button>
+            </div>
+          </div>
+          <div class="row hidden" id="relaunchRow">
+            <div class="row-label">
+              <span class="row-title">Restart to finish</span>
+              <span class="row-sub">macOS only applies the new permission after Nyra restarts</span>
+            </div>
+            <div class="row-control">
+              <button id="relaunchNyra" class="btn-secondary" type="button">Relaunch Nyra</button>
+            </div>
+          </div>
           <div class="row">
             <div class="row-label">
               <span class="row-title">Run a quick check</span>

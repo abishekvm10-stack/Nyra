@@ -64,10 +64,16 @@ const hotkeyKeys = $("hotkeyKeys");
 const hotkeySideText = $("hotkeySideText");
 const hotkeyHint = $("hotkeyHint");
 const automationSection = $("automationSection");
+const automationSectionSub = $("automationSectionSub");
 const automationUnavailableHint = $("automationUnavailableHint");
 const automationEnabledCheckbox = $("automationEnabled");
 const testAutomationButton = $("testAutomation");
 const automationTestResultEl = $("automationTestResult");
+const accessibilityRow = $("accessibilityRow");
+const accessibilityStatusText = $("accessibilityStatusText");
+const grantAccessibilityButton = $("grantAccessibility");
+const relaunchRow = $("relaunchRow");
+const relaunchNyraButton = $("relaunchNyra");
 const saveIndicator = $("saveIndicator");
 const statusDot = $("statusDot");
 const statusTitle = $("statusTitle");
@@ -552,6 +558,38 @@ launchAtStartupCheckbox.addEventListener("change", async () => {
 
 /* ---------- boot ---------- */
 
+// macOS-only: the Accessibility card row only ever shows for a real,
+// currently-missing grant — checking live rather than trusting a
+// cached settings field, since a grant made outside Nyra (System
+// Settings) or one that only takes effect after relaunch wouldn't be
+// reflected in stored settings.
+async function refreshAccessibilityUI(platform) {
+  if (platform !== "darwin") {
+    accessibilityRow.classList.add("hidden");
+    relaunchRow.classList.add("hidden");
+    return;
+  }
+  const status = await window.nyra.automationStatus();
+  accessibilityRow.classList.toggle("hidden", !status.needsPermission);
+  if (status.needsPermission) relaunchRow.classList.add("hidden");
+}
+
+grantAccessibilityButton.addEventListener("click", async () => {
+  grantAccessibilityButton.disabled = true;
+  const result = await window.nyra.requestAccessibility();
+  grantAccessibilityButton.disabled = false;
+
+  if (result.granted) {
+    accessibilityRow.classList.add("hidden");
+    relaunchRow.classList.remove("hidden");
+  } else {
+    accessibilityStatusText.textContent =
+      "Still not granted — check System Settings → Privacy & Security → Accessibility, enable Nyra, then try again.";
+  }
+});
+
+relaunchNyraButton.addEventListener("click", () => window.nyra.relaunch());
+
 async function loadSettings() {
   const settings = await window.nyra.getSettings();
   currentSettings = { ...settings };
@@ -565,11 +603,15 @@ async function loadSettings() {
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";
 
-  const automationSupported = settings.platform === "win32";
+  const automationSupported = settings.platform === "win32" || settings.platform === "darwin";
   automationSection.classList.toggle("hidden", !automationSupported);
   automationUnavailableHint.classList.toggle("hidden", automationSupported);
   automationEnabledCheckbox.checked = automationSupported && Boolean(settings.automationEnabled);
+  automationSectionSub.textContent =
+    settings.platform === "darwin" ? "One keypress, no ⌘C/⌘V" : "One keypress, no Ctrl+C/V";
   saveHistoryCheckbox.checked = settings.saveHistory !== false;
+
+  await refreshAccessibilityUI(settings.platform);
 
   $("appVersion").textContent = settings.appVersion ? `v${settings.appVersion}` : "";
   userDataPathEl.textContent = settings.userDataPath || "";

@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld("nyra", {
   saveSettings: (settings) => ipcRenderer.invoke("nyra:save-settings", settings),
   setHotkey: (accelerator) => ipcRenderer.invoke("nyra:set-hotkey", accelerator),
   testAutomation: () => ipcRenderer.invoke("nyra:test-automation"),
+  automationStatus: () => ipcRenderer.invoke("nyra:automation-status"),
+  requestAccessibility: () => ipcRenderer.invoke("nyra:request-accessibility"),
+  relaunch: () => ipcRenderer.invoke("nyra:relaunch"),
   compileTest: (text) => ipcRenderer.invoke("nyra:compile-test", text),
   onSettingsChanged: (handler) =>
     ipcRenderer.on("nyra:settings-changed", () => handler()),

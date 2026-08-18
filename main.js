@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog, nativeImage, shell, systemPreferences } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
@@ -23,6 +23,10 @@ let settingsWindow = null;
 
 const DEFAULT_HOTKEY = "Alt+P";
 const DEFAULT_BACKEND_URL = "https://nyra-pddf.onrender.com";
+
+const IS_MAC = process.platform === "darwin";
+const COPY_KEY = IS_MAC ? "⌘C" : "Ctrl+C";
+const PASTE_KEY = IS_MAC ? "⌘V" : "Ctrl+V";
 
 // Mirrors the agent dropdown in settings.html — kept here so the tray
 // submenu offers the same choices without the renderer being open.
@@ -175,7 +179,7 @@ function registerHotkey(accelerator) {
 }
 
 const AUTOMATION_MAX_CHARS = 8000; // above this it's a document, not a prompt
-const AUTOMATION_POLL_INTERVAL_MS = 50;
+const AUTOMATION_POLL_INTERVAL_MS = 15;
 const AUTOMATION_POLL_TIMEOUT_MS = 800;
 
 // Polls the clipboard until it differs from `sentinel`, or gives up
@@ -192,8 +196,35 @@ async function waitForClipboardChange(sentinel, timeoutMs) {
   return null;
 }
 
+function automationPlatformSupported() {
+  return process.platform === "win32" || IS_MAC;
+}
+
+// Windows has no equivalent permission gate, so this is always null
+// there. On macOS, Accessibility grants are keyed to the app's code
+// signature — since Nyra is only ad-hoc signed, a re-grant is needed
+// after every rebuild/update, and AXIsProcessTrusted caches per
+// process so a fresh grant won't be reflected until relaunch.
+function accessibilityStatus(prompt = false) {
+  if (!IS_MAC) return null;
+  return systemPreferences.isTrustedAccessibilityClient(prompt) ? "granted" : "denied";
+}
+
+// One precise reason automation can't run right now, or null if it's
+// good to go. Centralizes the platform/engine/permission checks that
+// used to be scattered across automationUsable(), the tray menu, and
+// the self-test's early return.
+function automationBlockedReason() {
+  if (!automationPlatformSupported()) return "Automation isn't available on this platform yet.";
+  if (!automation.isAvailable()) return automation.unavailableReason() || "Automation engine failed to load.";
+  if (IS_MAC && accessibilityStatus() !== "granted") {
+    return "Nyra needs Accessibility access — grant it in Settings.";
+  }
+  return null;
+}
+
 function automationUsable(settings) {
-  return Boolean(settings.automationEnabled) && process.platform === "win32" && automation.isAvailable();
+  return Boolean(settings.automationEnabled) && !automationBlockedReason();
 }
 
 async function handleHotkey() {
@@ -207,7 +238,7 @@ async function handleHotkey() {
   let rawText;
 
   if (useAutomation) {
-    const sentinel = `__nyra_sentinel_${Date.now()}__`;
+    let sentinel = `__nyra_sentinel_${Date.now()}__`;
     clipboard.writeText(sentinel);
 
     try {
@@ -217,12 +248,28 @@ async function handleHotkey() {
       return;
     }
 
-    const captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
+    let captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
+
+    // The fast key-event profile (10ms) can outrun a slow target app.
+    // Retry once at the old, safer 300ms profile before giving up \u2014
+    // this is what makes the speedup safe rather than just faster.
     if (captured === null) {
-      notify(
-        "Nyra",
-        "Nothing was captured \u2014 the focused app may be running as administrator (Windows blocks synthetic input into elevated windows), or nothing was focused. Select your text and press Ctrl+C manually instead."
-      );
+      automation.setSpeedProfile("safe");
+      sentinel = `__nyra_sentinel_${Date.now()}__`;
+      clipboard.writeText(sentinel);
+      try {
+        await automation.selectAllAndCopy();
+        captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
+      } finally {
+        automation.setSpeedProfile("fast");
+      }
+    }
+
+    if (captured === null) {
+      const reason = IS_MAC
+        ? `Nothing was captured \u2014 the focused app may be blocking synthetic input (e.g. a password field, or "Secure Keyboard Entry" in Terminal/iTerm), or nothing was focused. Select your text and press ${COPY_KEY} manually instead.`
+        : "Nothing was captured \u2014 the focused app may be running as administrator (Windows blocks synthetic input into elevated windows), or nothing was focused. Select your text and press Ctrl+C manually instead.";
+      notify("Nyra", reason);
       return;
     }
 
@@ -241,7 +288,7 @@ async function handleHotkey() {
   }
 
   if (!rawText) {
-    notify("Nyra", `Copy some text first (Ctrl+C), then press ${currentHotkey()}.`);
+    notify("Nyra", `Copy some text first (${COPY_KEY}), then press ${currentHotkey()}.`);
     return;
   }
 
@@ -273,10 +320,10 @@ async function handleHotkey() {
       } catch (err) {
         // Graceful degradation to today's manual behavior \u2014 the
         // compiled text is still on the clipboard either way.
-        notify("Nyra", `Compiled \u2014 press Ctrl+V to paste it. (Auto-paste failed: ${String(err.message || err)})`);
+        notify("Nyra", `Compiled \u2014 press ${PASTE_KEY} to paste it. (Auto-paste failed: ${String(err.message || err)})`);
       }
     } else {
-      notify("Nyra", "Compiled \u2014 press Ctrl+V to paste it.");
+      notify("Nyra", `Compiled \u2014 press ${PASTE_KEY} to paste it.`);
     }
   } catch (err) {
     clipboard.writeText(rawText); // put the original back so nothing is lost
@@ -289,11 +336,9 @@ async function handleHotkey() {
 // failure, instead of "it just doesn't work" discovered days later in
 // some random chat box.
 async function runAutomationSelfTest() {
-  if (process.platform !== "win32") {
-    return { ok: false, reason: "Automation is Windows-only right now." };
-  }
-  if (!automation.isAvailable()) {
-    return { ok: false, reason: automation.unavailableReason() || "Automation engine failed to load." };
+  const blockedReason = automationBlockedReason();
+  if (blockedReason) {
+    return { ok: false, reason: blockedReason };
   }
 
   const knownText = `nyra-self-test-${Date.now()}`;
@@ -316,7 +361,11 @@ async function runAutomationSelfTest() {
     // nut-js sends OS-level input to whatever window the OS currently
     // has in the foreground, which is a different thing from in-page
     // DOM focus — explicitly claim it rather than assuming Electron's
-    // default show/focus behavior is enough.
+    // default show/focus behavior is enough. On macOS, Nyra runs with
+    // its dock icon hidden (app.dock.hide() below), so a plain
+    // window.focus() doesn't reliably steal the foreground — app.focus()
+    // with steal:true is needed too.
+    if (IS_MAC) app.focus({ steal: true });
     testWindow.show();
     testWindow.focus();
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -327,10 +376,10 @@ async function runAutomationSelfTest() {
 
     const captured = await waitForClipboardChange(sentinel, AUTOMATION_POLL_TIMEOUT_MS);
     if (captured === null) {
-      return {
-        ok: false,
-        reason: "Keystrokes were sent but nothing was captured — Windows may be blocking synthetic input (this can happen if Nyra needs administrator rights to reach the focused window).",
-      };
+      const reason = IS_MAC
+        ? "Keystrokes were sent but nothing was captured — macOS may be blocking synthetic input (Secure Keyboard Entry, or Accessibility access not actually taking effect until Nyra is relaunched)."
+        : "Keystrokes were sent but nothing was captured — Windows may be blocking synthetic input (this can happen if Nyra needs administrator rights to reach the focused window).";
+      return { ok: false, reason };
     }
     if (captured.trim() !== knownText) {
       return { ok: false, reason: `Captured text didn't match what was expected (got "${captured.trim()}") — something intercepted or altered the keystrokes.` };
@@ -344,7 +393,7 @@ async function runAutomationSelfTest() {
     await new Promise((resolve) => setTimeout(resolve, 200));
     const pasted = await testWindow.webContents.executeJavaScript('document.getElementById("t").value');
     if (pasted !== pasteCheck) {
-      return { ok: false, reason: "Copy works but paste didn't land — auto-paste may fail in real use; you can still paste manually with Ctrl+V after compiling." };
+      return { ok: false, reason: `Copy works but paste didn't land — auto-paste may fail in real use; you can still paste manually with ${PASTE_KEY} after compiling.` };
     }
 
     return { ok: true };
@@ -431,7 +480,7 @@ function rebuildTrayMenu() {
         label: "Auto-paste",
         type: "checkbox",
         checked: Boolean(settings.automationEnabled),
-        enabled: process.platform === "win32" && automation.isAvailable(),
+        enabled: automationPlatformSupported() && automation.isAvailable(),
         click: (item) => {
           store.set("automationEnabled", item.checked);
           notifySettingsChanged();
@@ -530,6 +579,23 @@ ipcMain.handle("nyra:set-hotkey", (_event, accelerator) => {
   return result;
 });
 ipcMain.handle("nyra:test-automation", () => runAutomationSelfTest());
+ipcMain.handle("nyra:automation-status", () => ({
+  platformSupported: automationPlatformSupported(),
+  engineAvailable: automation.isAvailable(),
+  needsPermission: IS_MAC && accessibilityStatus() !== "granted",
+  reason: automationBlockedReason(),
+}));
+ipcMain.handle("nyra:request-accessibility", () => {
+  const granted = accessibilityStatus(true) === "granted";
+  if (!granted) {
+    shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+  }
+  return { granted };
+});
+ipcMain.handle("nyra:relaunch", () => {
+  app.relaunch();
+  app.quit();
+});
 // Powers the "Try it" box: compiles without touching the clipboard or
 // the user's focused app, so they can see what a settings change
 // actually does to the output without leaving the window.
