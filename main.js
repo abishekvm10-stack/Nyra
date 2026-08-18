@@ -337,9 +337,12 @@ function createSettingsWindow() {
     return;
   }
   settingsWindow = new BrowserWindow({
-    width: 340,
-    height: 540,
-    resizable: false,
+    width: 380,
+    height: 640,
+    minWidth: 340,
+    minHeight: 420,
+    resizable: true,
+    maximizable: true,
     title: "Nyra",
     webPreferences: {
       preload: path.join(__dirname, "settings", "preload.js"),
