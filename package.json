@@ -1,6 +1,6 @@
 {
   "name": "nyra-desktop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
   "main": "main.js",
   "scripts": {
@@ -20,8 +20,22 @@
   "build": {
     "appId": "com.nyra.desktop",
     "productName": "Nyra",
-    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md", "!MEMORY.md", "!tools/**"],
+    "files": [
+      "**/*",
+      "!README.md",
+      "!BUILD-GUIDE.md",
+      "!PROJECT-SPEC.md",
+      "!MEMORY.md",
+      "!tools/**",
+      "!dist/**",
+      "!release/**",
+      "!backend/**",
+      "!.github/**",
+      "!package-lock.json"
+    ],
     "asarUnpack": ["**/node_modules/@nut-tree-fork/**/*", "**/node_modules/@nut-tree/**/*"],
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico",
@@ -32,6 +46,11 @@
         "!PROJECT-SPEC.md",
         "!MEMORY.md",
         "!tools/**",
+        "!dist/**",
+        "!release/**",
+        "!backend/**",
+        "!.github/**",
+        "!package-lock.json",
         "!node_modules/@nut-tree-fork/libnut-darwin/**",
         "!node_modules/@nut-tree-fork/libnut-linux/**"
       ]
@@ -55,10 +74,16 @@
         "!PROJECT-SPEC.md",
         "!MEMORY.md",
         "!tools/**",
+        "!dist/**",
+        "!release/**",
+        "!backend/**",
+        "!.github/**",
+        "!package-lock.json",
         "!node_modules/@nut-tree-fork/libnut-win32/**",
         "!node_modules/@nut-tree-fork/libnut-linux/**"
       ]
     },
+    "afterPack": "build/afterPackHook.js",
     "afterSign": "build/afterSignHook.js",
     "publish": {
       "provider": "github",
