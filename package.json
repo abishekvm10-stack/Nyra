@@ -1,6 +1,6 @@
 {
   "name": "nyra-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
   "main": "main.js",
   "scripts": {

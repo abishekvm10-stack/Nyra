@@ -51,3 +51,12 @@ jobs:
         run: npm run build:mac -- --universal --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Upload mac build as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-build
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
