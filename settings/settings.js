@@ -75,23 +75,20 @@ const tryItMeta = $("tryItMeta");
 let currentSettings = {};
 let listeningForHotkey = false;
 
-/* ---------- collapsible sections ---------- */
+/* ---------- sidebar navigation ---------- */
 
-function wireSection(headerId, bodyId) {
-  const header = $(headerId);
-  const body = $(bodyId);
-  header.addEventListener("click", () => {
-    const open = header.getAttribute("aria-expanded") === "true";
-    header.setAttribute("aria-expanded", String(!open));
-    body.classList.toggle("hidden", open);
+function wireNav() {
+  const navItems = document.querySelectorAll(".nav-item");
+  const views = document.querySelectorAll(".view");
+  navItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      navItems.forEach((n) => n.classList.toggle("active", n === item));
+      views.forEach((v) => v.classList.toggle("active", v.dataset.view === item.dataset.view));
+    });
   });
 }
 
-wireSection("tryItHeader", "tryItBody");
-wireSection("providerHeader", "providerBody");
-wireSection("tuningHeader", "tuningBody");
-wireSection("behaviorHeader", "behaviorBody");
-wireSection("contextHeader", "contextBody");
+wireNav();
 
 /* ---------- hotkey rendering ---------- */
 
@@ -282,29 +279,8 @@ function refreshStatusLine() {
   statusTitle.textContent = title;
 }
 
-function refreshSummaries() {
-  $("providerSummary").textContent = providerLabel();
-
-  const agent = currentSettings.targetAgent;
-  const model = currentSettings.targetModelName;
-  $("tuningSummary").textContent = agent
-    ? [agent === "Other" ? null : agent, model].filter(Boolean).join(" · ") || "Custom"
-    : "Generic";
-
-  const behaviorBits = [currentSettings.hotkey];
-  if (currentSettings.platform === "win32") {
-    behaviorBits.push(currentSettings.automationEnabled ? "Auto on" : "Auto off");
-  }
-  $("behaviorSummary").textContent = behaviorBits.filter(Boolean).join(" · ");
-
-  $("contextSummary").textContent = currentSettings.projectFolder
-    ? currentSettings.projectFolder.split(/[\\/]/).pop()
-    : "Not connected";
-}
-
 function refreshDerivedUI() {
   refreshStatusLine();
-  refreshSummaries();
 }
 
 /* ---------- provider-dependent fields ---------- */
@@ -431,6 +407,10 @@ clearFolderButton.addEventListener("click", async () => {
   updateProjectFolderDisplay(null);
 });
 
+$("openSource").addEventListener("click", () => {
+  window.nyra.openExternal("https://github.com/abishekvm10-stack/Nyra");
+});
+
 /* ---------- boot ---------- */
 
 async function loadSettings() {
@@ -449,6 +429,8 @@ async function loadSettings() {
   automationSection.classList.toggle("hidden", !automationSupported);
   automationUnavailableHint.classList.toggle("hidden", automationSupported);
   automationEnabledCheckbox.checked = automationSupported && Boolean(settings.automationEnabled);
+
+  $("appVersion").textContent = settings.appVersion ? `v${settings.appVersion}` : "";
 
   renderHotkeyKeys(settings.hotkey);
   updateTargetModelField();

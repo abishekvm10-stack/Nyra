@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld("nyra", {
     ipcRenderer.on("nyra:settings-changed", () => handler()),
   chooseProjectFolder: () => ipcRenderer.invoke("nyra:choose-project-folder"),
   clearProjectFolder: () => ipcRenderer.invoke("nyra:clear-project-folder"),
+  openExternal: (url) => ipcRenderer.invoke("nyra:open-external", url),
 });

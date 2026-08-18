@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification, ipcMain, dialog, nativeImage, shell } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
@@ -99,6 +99,7 @@ function setupAutoUpdater() {
 
 function getSettings() {
   return {
+    appVersion: app.getVersion(),
     provider: store.get("provider", ""),
     tier: store.get("tier", "fast"),
     hotkey: currentHotkey(),
@@ -337,10 +338,10 @@ function createSettingsWindow() {
     return;
   }
   settingsWindow = new BrowserWindow({
-    width: 380,
-    height: 640,
-    minWidth: 340,
-    minHeight: 420,
+    width: 900,
+    height: 620,
+    minWidth: 760,
+    minHeight: 540,
     resizable: true,
     maximizable: true,
     title: "Nyra",
@@ -522,4 +523,7 @@ ipcMain.handle("nyra:choose-project-folder", async () => {
 ipcMain.handle("nyra:clear-project-folder", () => {
   store.delete("projectFolder");
   return true;
+});
+ipcMain.handle("nyra:open-external", (_event, url) => {
+  if (/^https:\/\//.test(url)) shell.openExternal(url);
 });
