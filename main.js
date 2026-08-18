@@ -132,6 +132,9 @@ function getSettings() {
     backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),
     projectFolder: store.get("projectFolder", ""),
     saveHistory: store.get("saveHistory", true),
+    launchAtStartup: app.isPackaged ? app.getLoginItemSettings().openAtLogin : false,
+    userDataPath: app.getPath("userData"),
+    packaged: app.isPackaged,
   };
 }
 
@@ -384,7 +387,6 @@ function createSettingsWindow() {
 // to do nothing when the tray copy is already running.
 app.on("second-instance", () => {
   createSettingsWindow();
-  setupAutoUpdater();
 });
 
 function createTray() {
@@ -492,6 +494,7 @@ app.whenReady().then(() => {
   }
 
   createSettingsWindow();
+  setupAutoUpdater();
 
   if (process.platform === "darwin" && app.dock) app.dock.hide();
 });
@@ -565,4 +568,24 @@ ipcMain.handle("nyra:delete-history-entry", (_event, id) => {
 ipcMain.handle("nyra:copy-to-clipboard", (_event, text) => {
   clipboard.writeText(text);
   return true;
+});
+ipcMain.handle("nyra:set-launch-at-startup", (_event, enabled) => {
+  if (!app.isPackaged) return false;
+  app.setLoginItemSettings({ openAtLogin: enabled });
+  rebuildTrayMenu(); // keep the tray checkbox in step with the window
+  return true;
+});
+ipcMain.handle("nyra:open-data-dir", () => {
+  shell.openPath(app.getPath("userData"));
+});
+ipcMain.handle("nyra:check-for-updates", async () => {
+  if (!app.isPackaged) {
+    return { ok: false, reason: "Update checks only run in the installed app, not in development." };
+  }
+  try {
+    await autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err.message || err) };
+  }
 });

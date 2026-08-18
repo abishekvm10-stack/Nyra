@@ -38,7 +38,7 @@ const CODE_TO_ACCELERATOR_KEY = {
 
 const $ = (id) => document.getElementById(id);
 
-const providerSelect = $("provider");
+const providerRadios = document.querySelectorAll('input[name="provider"]');
 const tierSelect = $("tier");
 const targetAgentSelect = $("targetAgent");
 const targetModelNameInput = $("targetModelName");
@@ -75,20 +75,45 @@ const saveHistoryCheckbox = $("saveHistory");
 const historyListEl = $("historyList");
 const historyEmptyEl = $("historyEmptyState");
 const clearHistoryButton = $("clearHistory");
+const launchAtStartupCheckbox = $("launchAtStartup");
+const launchAtStartupSub = $("launchAtStartupSub");
+const userDataPathEl = $("userDataPath");
+const checkUpdatesButton = $("checkUpdates");
+const updateCheckResultEl = $("updateCheckResult");
 
 let currentSettings = {};
 let listeningForHotkey = false;
 
+/* ---------- provider tiles ---------- */
+
+function getProvider() {
+  return [...providerRadios].find((r) => r.checked)?.value || "";
+}
+
+function setProvider(value) {
+  providerRadios.forEach((r) => (r.checked = r.value === value));
+}
+
 /* ---------- sidebar navigation ---------- */
 
 function wireNav() {
-  const navItems = document.querySelectorAll(".nav-item");
+  const navItems = [...document.querySelectorAll(".nav-item")];
   const views = document.querySelectorAll(".view");
-  navItems.forEach((item) => {
-    item.addEventListener("click", () => {
-      navItems.forEach((n) => n.classList.toggle("active", n === item));
-      views.forEach((v) => v.classList.toggle("active", v.dataset.view === item.dataset.view));
-      if (item.dataset.view === "history") loadHistory();
+
+  function activate(item) {
+    navItems.forEach((n) => n.classList.toggle("active", n === item));
+    views.forEach((v) => v.classList.toggle("active", v.dataset.view === item.dataset.view));
+    if (item.dataset.view === "history") loadHistory();
+  }
+
+  navItems.forEach((item, i) => {
+    item.addEventListener("click", () => activate(item));
+    item.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const next = navItems[(i + (e.key === "ArrowDown" ? 1 : -1) + navItems.length) % navItems.length];
+      next.focus();
+      activate(next);
     });
   });
 }
@@ -296,7 +321,7 @@ function flashSaved() {
 
 function collectSettings() {
   return {
-    provider: providerSelect.value,
+    provider: getProvider(),
     tier: tierSelect.value,
     targetAgent: targetAgentSelect.value,
     targetModelName: targetModelNameInput.value.trim(),
@@ -375,7 +400,7 @@ function refreshDerivedUI() {
 /* ---------- provider-dependent fields ---------- */
 
 function updateFieldVisibility() {
-  const provider = providerSelect.value;
+  const provider = getProvider();
   const isLocal = provider === "local";
   const isCloud = provider === "nyra-cloud";
   localFields.classList.toggle("hidden", !isLocal);
@@ -385,7 +410,7 @@ function updateFieldVisibility() {
 }
 
 function updateModelPreview() {
-  const provider = providerSelect.value;
+  const provider = getProvider();
   if (provider === "nyra-cloud") {
     modelPreviewEl.textContent = "Model choice happens on the shared backend.";
     return;
@@ -421,10 +446,12 @@ function updateProjectFolderDisplay(folderPath) {
 
 /* ---------- events ---------- */
 
-providerSelect.addEventListener("change", () => {
-  updateFieldVisibility();
-  updateModelPreview();
-  save({ immediate: true });
+providerRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    updateFieldVisibility();
+    updateModelPreview();
+    save({ immediate: true });
+  });
 });
 tierSelect.addEventListener("change", () => {
   updateModelPreview();
@@ -500,13 +527,29 @@ $("openSource").addEventListener("click", () => {
   window.nyra.openExternal("https://github.com/abishekvm10-stack/Nyra");
 });
 
+$("openDataDir").addEventListener("click", () => window.nyra.openDataDir());
+
+checkUpdatesButton.addEventListener("click", async () => {
+  updateCheckResultEl.textContent = "Checking…";
+  checkUpdatesButton.disabled = true;
+  const result = await window.nyra.checkForUpdates();
+  checkUpdatesButton.disabled = false;
+  updateCheckResultEl.textContent = result.ok
+    ? "Checking in the background — you'll be notified if an update is found."
+    : result.reason;
+});
+
+launchAtStartupCheckbox.addEventListener("change", async () => {
+  await window.nyra.setLaunchAtStartup(launchAtStartupCheckbox.checked);
+});
+
 /* ---------- boot ---------- */
 
 async function loadSettings() {
   const settings = await window.nyra.getSettings();
   currentSettings = { ...settings };
 
-  providerSelect.value = settings.provider || "";
+  setProvider(settings.provider || "");
   tierSelect.value = settings.tier || "fast";
   targetAgentSelect.value = settings.targetAgent || "";
   targetModelNameInput.value = settings.targetModelName || "";
@@ -521,6 +564,13 @@ async function loadSettings() {
   saveHistoryCheckbox.checked = settings.saveHistory !== false;
 
   $("appVersion").textContent = settings.appVersion ? `v${settings.appVersion}` : "";
+  userDataPathEl.textContent = settings.userDataPath || "";
+
+  launchAtStartupCheckbox.checked = Boolean(settings.launchAtStartup);
+  launchAtStartupCheckbox.disabled = !settings.packaged;
+  launchAtStartupSub.textContent = settings.packaged
+    ? "Opens Nyra automatically when you log in"
+    : "Only available in the installed app, not in development";
 
   renderHotkeyKeys(settings.hotkey);
   updateTargetModelField();

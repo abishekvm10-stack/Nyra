@@ -90,6 +90,19 @@
               </label>
             </div>
           </div>
+          <div class="row" id="launchAtStartupRow">
+            <div class="row-label">
+              <span class="row-title">Launch at startup</span>
+              <span class="row-sub" id="launchAtStartupSub">Opens Nyra automatically when you log in</span>
+            </div>
+            <div class="row-control">
+              <label class="toggle">
+                <input id="launchAtStartup" type="checkbox" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -97,24 +110,58 @@
       <section class="view" data-view="provider">
         <h1 class="view-title">Provider</h1>
 
+        <div class="tile-grid" id="providerTiles">
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="nyra-cloud" />
+            <span class="tile-mark tile-mark-cloud">N</span>
+            <span class="tile-text">
+              <span class="tile-title">Nyra Cloud</span>
+              <span class="tile-sub">Free, shared &mdash; no key needed</span>
+            </span>
+          </label>
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="local" />
+            <span class="tile-mark tile-mark-local">L</span>
+            <span class="tile-text">
+              <span class="tile-title">Local (Ollama)</span>
+              <span class="tile-sub">Free, no rate limit</span>
+            </span>
+          </label>
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="groq" />
+            <span class="tile-mark tile-mark-groq">Q</span>
+            <span class="tile-text">
+              <span class="tile-title">Groq</span>
+              <span class="tile-sub">Free, large models</span>
+            </span>
+          </label>
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="openai" />
+            <span class="tile-mark tile-mark-openai">O</span>
+            <span class="tile-text">
+              <span class="tile-title">OpenAI</span>
+              <span class="tile-sub">Bring your own key</span>
+            </span>
+          </label>
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="anthropic" />
+            <span class="tile-mark tile-mark-anthropic">A</span>
+            <span class="tile-text">
+              <span class="tile-title">Anthropic</span>
+              <span class="tile-sub">Bring your own key</span>
+            </span>
+          </label>
+          <label class="provider-tile">
+            <input type="radio" name="provider" value="gemini" />
+            <span class="tile-mark tile-mark-gemini">G</span>
+            <span class="tile-text">
+              <span class="tile-title">Google</span>
+              <span class="tile-sub">Bring your own key</span>
+            </span>
+          </label>
+        </div>
+
         <div class="card">
-          <div class="row">
-            <div class="row-label">
-              <span class="row-title">Model provider</span>
-              <span class="row-sub">Where compiling actually happens</span>
-            </div>
-            <div class="row-control">
-              <select id="provider">
-                <option value="">Choose a provider&hellip;</option>
-                <option value="nyra-cloud">Nyra Cloud (free, shared &mdash; no key needed)</option>
-                <option value="local">Local (Ollama &mdash; free, no rate limit)</option>
-                <option value="groq">Groq (free, large models &mdash; rate limited)</option>
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="gemini">Google</option>
-              </select>
-            </div>
-          </div>
           <div class="row">
             <div class="row-label">
               <span class="row-title">Model tier</span>
@@ -258,13 +305,28 @@
 
         <div class="card">
           <div class="row">
-            <div class="row-label"><span class="row-title">Version</span></div>
-            <div class="row-control"><span class="row-value" id="appVersion"></span></div>
+            <div class="row-label">
+              <span class="row-title">Version</span>
+              <span class="row-sub" id="updateCheckResult"></span>
+            </div>
+            <div class="row-control">
+              <span class="row-value" id="appVersion"></span>
+              <button class="btn-secondary" id="checkUpdates" type="button">Check for updates</button>
+            </div>
           </div>
           <div class="row">
             <div class="row-label"><span class="row-title">Source code</span></div>
             <div class="row-control">
               <button class="btn-secondary" id="openSource" type="button">View on GitHub</button>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-label">
+              <span class="row-title">App data</span>
+              <span class="row-sub" id="userDataPath"></span>
+            </div>
+            <div class="row-control">
+              <button class="btn-secondary" id="openDataDir" type="button">Open</button>
             </div>
           </div>
         </div>

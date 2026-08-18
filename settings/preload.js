@@ -15,4 +15,7 @@ contextBridge.exposeInMainWorld("nyra", {
   clearHistory: () => ipcRenderer.invoke("nyra:clear-history"),
   deleteHistoryEntry: (id) => ipcRenderer.invoke("nyra:delete-history-entry", id),
   copyToClipboard: (text) => ipcRenderer.invoke("nyra:copy-to-clipboard", text),
+  setLaunchAtStartup: (enabled) => ipcRenderer.invoke("nyra:set-launch-at-startup", enabled),
+  openDataDir: () => ipcRenderer.invoke("nyra:open-data-dir"),
+  checkForUpdates: () => ipcRenderer.invoke("nyra:check-for-updates"),
 });
