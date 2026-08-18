@@ -8,8 +8,23 @@ on:
 permissions:
   contents: write
 
+# Both platforms build and publish NOTHING; a single release job at the
+# end attaches every artifact to one release.
+#
+# The previous design had each per-OS job call electron-builder with
+# `--publish always`, so two separate processes each independently
+# tried to find-or-create the release for the same tag. That produced
+# duplicate release entries with assets scattered across them (or
+# missing entirely) on every tag push — v0.2.2 and v0.2.3 both show
+# the symptom. Only one job talks to the Releases API now, so there is
+# nothing left to race.
+#
+# `--publish never` does NOT skip generating latest.yml /
+# latest-mac.yml (verified) — electron-updater's manifests are emitted
+# during packaging because a publish config exists in package.json, so
+# auto-update still works despite nothing being uploaded here.
 jobs:
-  windows:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -25,13 +40,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish Windows installer
-        run: npm run build:win -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Build Windows installer
+        run: npm run build:win -- --publish never
 
-  macos:
-    needs: windows
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+
+  # No longer `needs: build-windows` — with publishing removed there's
+  # no shared resource to serialize around, so both platforms build in
+  # parallel and the whole pipeline finishes in about half the time.
+  build-mac:
     runs-on: macos-latest
 
     steps:
@@ -47,14 +72,52 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish Mac package (arm64)
-        run: npm run build:mac -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Build Mac package (arm64)
+        run: npm run build:mac -- --publish never
 
-      - name: Upload mac build as workflow artifact
+      - name: Upload Mac build
         uses: actions/upload-artifact@v4
         with:
           name: mac-build
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
           if-no-files-found: error
+
+  release:
+    needs: [build-windows, build-mac]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Collect all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          pattern: "*-build"
+          merge-multiple: true
+
+      - name: Show what will be attached
+        run: ls -la release-files
+
+      # Uses the preinstalled gh CLI rather than a third-party release
+      # action, to avoid adding a supply-chain dependency to the one
+      # job that holds write access to Releases. Handles re-runs of an
+      # existing tag by uploading over the existing release instead of
+      # failing.
+      - name: Publish single GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists — uploading assets to it."
+            gh release upload "$GITHUB_REF_NAME" release-files/* --clobber
+          else
+            echo "Creating release $GITHUB_REF_NAME."
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              release-files/*
+          fi
