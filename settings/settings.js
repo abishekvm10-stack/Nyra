@@ -7,11 +7,14 @@ const MODEL_MAP = {
   gemini: { fast: "gemini-flash-latest", quality: "gemini-pro-latest" },
 };
 
-const providerSelect = document.getElementById("provider");
-const tierSelect = document.getElementById("tier");
-const targetAgentSelect = document.getElementById("targetAgent");
-const targetModelNameInput = document.getElementById("targetModelName");
-const targetModelNameSuggestions = document.getElementById("targetModelNameSuggestions");
+const PROVIDER_LABELS = {
+  "nyra-cloud": "Nyra Cloud",
+  local: "Local (Ollama)",
+  groq: "Groq",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  gemini: "Google",
+};
 
 // Just convenience suggestions per agent — always editable/free-text
 // regardless, so a model missing from this list (including ones that
@@ -22,54 +25,76 @@ const MODEL_SUGGESTIONS_BY_AGENT = {
   Gemini: ["Gemini 3 Pro", "Gemini 3 Flash"],
 };
 
-const apiKeyInput = document.getElementById("apiKey");
-const apiKeyField = document.getElementById("apiKeyField");
-const groqHint = document.getElementById("groqHint");
-const localFields = document.getElementById("localFields");
-const ollamaUrlInput = document.getElementById("ollamaUrl");
-const cloudFields = document.getElementById("cloudFields");
-const backendUrlInput = document.getElementById("backendUrl");
-const saveButton = document.getElementById("save");
-const statusEl = document.getElementById("status");
-const modelPreviewEl = document.getElementById("modelPreview");
-const chooseFolderButton = document.getElementById("chooseFolder");
-const clearFolderButton = document.getElementById("clearFolder");
-const projectFolderPathEl = document.getElementById("projectFolderPath");
-const subtitleEl = document.getElementById("subtitle");
-const hotkeyInput = document.getElementById("hotkeyInput");
-const hotkeyHint = document.getElementById("hotkeyHint");
-const automationSection = document.getElementById("automationSection");
-const automationUnavailableHint = document.getElementById("automationUnavailableHint");
-const automationEnabledCheckbox = document.getElementById("automationEnabled");
-const testAutomationButton = document.getElementById("testAutomation");
-const automationTestResultEl = document.getElementById("automationTestResult");
-
 // Named keys accelerators accept beyond plain letters/digits/function
 // keys. Anything not covered here (punctuation, media keys, etc.)
 // isn't offered — keeping the recorder simple and predictable rather
 // than trying to cover every possible key on every layout.
 const CODE_TO_ACCELERATOR_KEY = {
-  Space: "Space",
-  Tab: "Tab",
-  Escape: "Esc",
-  Backspace: "Backspace",
-  Delete: "Delete",
-  Insert: "Insert",
-  Enter: "Return",
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  Home: "Home",
-  End: "End",
-  PageUp: "PageUp",
-  PageDown: "PageDown",
+  Space: "Space", Tab: "Tab", Escape: "Esc", Backspace: "Backspace",
+  Delete: "Delete", Insert: "Insert", Enter: "Return",
+  ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+  Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
 };
 
-// Derived from e.code, not e.key: e.key reflects what the held
-// modifiers turn the key INTO (e.g. Alt can shift what a key reports
-// on some layouts), while e.code identifies the physical key
-// regardless of modifiers — the correct source for a shortcut.
+const $ = (id) => document.getElementById(id);
+
+const providerSelect = $("provider");
+const tierSelect = $("tier");
+const targetAgentSelect = $("targetAgent");
+const targetModelNameInput = $("targetModelName");
+const targetModelNameSuggestions = $("targetModelNameSuggestions");
+const apiKeyInput = $("apiKey");
+const apiKeyField = $("apiKeyField");
+const groqHint = $("groqHint");
+const localFields = $("localFields");
+const ollamaUrlInput = $("ollamaUrl");
+const cloudFields = $("cloudFields");
+const backendUrlInput = $("backendUrl");
+const modelPreviewEl = $("modelPreview");
+const chooseFolderButton = $("chooseFolder");
+const clearFolderButton = $("clearFolder");
+const projectFolderPathEl = $("projectFolderPath");
+const hotkeyField = $("hotkeyField");
+const hotkeyKeys = $("hotkeyKeys");
+const hotkeySideText = $("hotkeySideText");
+const hotkeyHint = $("hotkeyHint");
+const automationSection = $("automationSection");
+const automationUnavailableHint = $("automationUnavailableHint");
+const automationEnabledCheckbox = $("automationEnabled");
+const testAutomationButton = $("testAutomation");
+const automationTestResultEl = $("automationTestResult");
+const saveIndicator = $("saveIndicator");
+const statusDot = $("statusDot");
+const statusTitle = $("statusTitle");
+const statusDetail = $("statusDetail");
+const tryItInput = $("tryItInput");
+const tryItRun = $("tryItRun");
+const tryItResult = $("tryItResult");
+const tryItMeta = $("tryItMeta");
+
+let currentSettings = {};
+let listeningForHotkey = false;
+
+/* ---------- collapsible sections ---------- */
+
+function wireSection(headerId, bodyId) {
+  const header = $(headerId);
+  const body = $(bodyId);
+  header.addEventListener("click", () => {
+    const open = header.getAttribute("aria-expanded") === "true";
+    header.setAttribute("aria-expanded", String(!open));
+    body.classList.toggle("hidden", open);
+  });
+}
+
+wireSection("tryItHeader", "tryItBody");
+wireSection("providerHeader", "providerBody");
+wireSection("tuningHeader", "tuningBody");
+wireSection("behaviorHeader", "behaviorBody");
+wireSection("contextHeader", "contextBody");
+
+/* ---------- hotkey rendering ---------- */
+
 function codeToAcceleratorKey(code) {
   if (/^Key[A-Z]$/.test(code)) return code.slice(3);
   if (/^Digit[0-9]$/.test(code)) return code.slice(5);
@@ -77,17 +102,212 @@ function codeToAcceleratorKey(code) {
   return CODE_TO_ACCELERATOR_KEY[code] || null;
 }
 
-function setHotkeyHint(text, color) {
-  hotkeyHint.textContent = text;
-  hotkeyHint.style.color = color;
+// "CommandOrControl" is the right thing to STORE (it resolves per
+// platform at registration) but a useless thing to show a user — they
+// want to see the key they actually press.
+function prettyKeyName(part) {
+  if (part !== "CommandOrControl") return part;
+  return currentSettings.platform === "darwin" ? "Cmd" : "Ctrl";
 }
 
-function updateSubtitle() {
-  const hotkey = hotkeyInput.value || "your hotkey";
-  subtitleEl.textContent = automationEnabledCheckbox.checked
-    ? `Select text anywhere, press ${hotkey} — it compiles and pastes automatically.`
-    : `Select text anywhere, Ctrl+C, then ${hotkey} to compile it.`;
+function renderHotkeyKeys(accelerator) {
+  hotkeyKeys.innerHTML = "";
+  const parts = (accelerator || "").split("+").filter(Boolean);
+  parts.forEach((part, i) => {
+    if (i > 0) {
+      const plus = document.createElement("span");
+      plus.className = "plus";
+      plus.textContent = "+";
+      hotkeyKeys.appendChild(plus);
+    }
+    const kbd = document.createElement("kbd");
+    kbd.textContent = prettyKeyName(part);
+    hotkeyKeys.appendChild(kbd);
+  });
 }
+
+function setHotkeyHint(text, color) {
+  hotkeyHint.textContent = text;
+  hotkeyHint.style.color = color || "#6b7383";
+}
+
+function stopListening() {
+  listeningForHotkey = false;
+  hotkeyField.classList.remove("listening");
+  hotkeySideText.textContent = "Click to change";
+  renderHotkeyKeys(currentSettings.hotkey);
+}
+
+hotkeyField.addEventListener("click", () => {
+  listeningForHotkey = true;
+  hotkeyField.classList.add("listening");
+  hotkeyKeys.innerHTML = "";
+  hotkeySideText.textContent = "Press your combo…";
+  setHotkeyHint("Include at least one modifier (Ctrl, Alt, or Shift).");
+});
+
+hotkeyField.addEventListener("blur", () => {
+  if (listeningForHotkey) stopListening();
+});
+
+hotkeyField.addEventListener("keydown", async (e) => {
+  if (!listeningForHotkey) return;
+  e.preventDefault();
+
+  if (e.key === "Escape") {
+    stopListening();
+    setHotkeyHint("");
+    return;
+  }
+  // A modifier held alone isn't a usable combo yet — wait for a real
+  // key on top of it.
+  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+
+  const key = codeToAcceleratorKey(e.code);
+  if (!key) {
+    setHotkeyHint("That key can't be used — try a letter, number, or function key.", "#e5484d");
+    return;
+  }
+
+  const modifiers = [];
+  if (e.ctrlKey || e.metaKey) modifiers.push("CommandOrControl");
+  if (e.altKey) modifiers.push("Alt");
+  if (e.shiftKey) modifiers.push("Shift");
+
+  if (modifiers.length === 0) {
+    setHotkeyHint("Needs at least one modifier — a bare key would be captured in every app.", "#e5484d");
+    return;
+  }
+
+  const accelerator = [...modifiers, key].join("+");
+  const result = await window.nyra.setHotkey(accelerator);
+
+  if (result.ok) {
+    currentSettings.hotkey = accelerator;
+    stopListening();
+    setHotkeyHint("");
+    flashSaved();
+    refreshDerivedUI();
+  } else {
+    hotkeyKeys.innerHTML = "";
+    setHotkeyHint(result.error || "That combo didn't register — try another.", "#e5484d");
+  }
+});
+
+/* ---------- auto-save ---------- */
+
+let saveTimer = null;
+let savedFlashTimer = null;
+
+function flashSaved() {
+  saveIndicator.textContent = "Saved";
+  saveIndicator.style.color = "#6fcf97";
+  clearTimeout(savedFlashTimer);
+  savedFlashTimer = setTimeout(() => {
+    saveIndicator.textContent = "Changes save as you make them.";
+    saveIndicator.style.color = "#6b7383";
+  }, 1600);
+}
+
+function collectSettings() {
+  return {
+    provider: providerSelect.value,
+    tier: tierSelect.value,
+    targetAgent: targetAgentSelect.value,
+    targetModelName: targetModelNameInput.value.trim(),
+    automationEnabled: automationEnabledCheckbox.checked,
+    apiKey: apiKeyInput.value.trim(),
+    ollamaUrl: ollamaUrlInput.value.trim() || "http://localhost:11434",
+    backendUrl: backendUrlInput.value.trim(),
+  };
+}
+
+// Text fields debounce so we aren't writing on every keystroke;
+// selects and toggles commit immediately since they're discrete.
+async function save({ immediate = false } = {}) {
+  clearTimeout(saveTimer);
+  const run = async () => {
+    const values = collectSettings();
+    Object.assign(currentSettings, values);
+    await window.nyra.saveSettings(values);
+    flashSaved();
+    refreshDerivedUI();
+  };
+  if (immediate) return run();
+  saveTimer = setTimeout(run, 400);
+}
+
+/* ---------- derived UI (status line + summaries) ---------- */
+
+function providerLabel() {
+  return PROVIDER_LABELS[currentSettings.provider] || "No provider";
+}
+
+function refreshStatusLine() {
+  const hasProvider = Boolean(currentSettings.provider);
+  const needsKey =
+    hasProvider &&
+    currentSettings.provider !== "local" &&
+    currentSettings.provider !== "nyra-cloud" &&
+    !currentSettings.apiKey;
+  const needsBackend =
+    currentSettings.provider === "nyra-cloud" && !currentSettings.backendUrl;
+
+  let dot = "ready";
+  let title = "Ready";
+
+  if (currentSettings.hotkeyFallback) {
+    dot = "warn";
+    title = "Hotkey unavailable";
+    statusDetail.textContent = `Saved combo taken — using ${currentSettings.hotkey} instead`;
+  } else if (!hasProvider) {
+    dot = "setup";
+    title = "Needs setup";
+    statusDetail.textContent = "Pick a provider to start";
+  } else if (needsKey) {
+    dot = "setup";
+    title = "Needs API key";
+    statusDetail.textContent = `${providerLabel()} needs a key`;
+  } else if (needsBackend) {
+    dot = "setup";
+    title = "Needs backend URL";
+    statusDetail.textContent = "Nyra Cloud needs its URL";
+  } else {
+    const bits = [providerLabel(), currentSettings.hotkey];
+    if (currentSettings.automationEnabled) bits.push("Auto-paste on");
+    statusDetail.textContent = bits.filter(Boolean).join(" · ");
+  }
+
+  statusDot.className = `status-dot ${dot}`;
+  statusTitle.textContent = title;
+}
+
+function refreshSummaries() {
+  $("providerSummary").textContent = providerLabel();
+
+  const agent = currentSettings.targetAgent;
+  const model = currentSettings.targetModelName;
+  $("tuningSummary").textContent = agent
+    ? [agent === "Other" ? null : agent, model].filter(Boolean).join(" · ") || "Custom"
+    : "Generic";
+
+  const behaviorBits = [currentSettings.hotkey];
+  if (currentSettings.platform === "win32") {
+    behaviorBits.push(currentSettings.automationEnabled ? "Auto on" : "Auto off");
+  }
+  $("behaviorSummary").textContent = behaviorBits.filter(Boolean).join(" · ");
+
+  $("contextSummary").textContent = currentSettings.projectFolder
+    ? currentSettings.projectFolder.split(/[\\/]/).pop()
+    : "Not connected";
+}
+
+function refreshDerivedUI() {
+  refreshStatusLine();
+  refreshSummaries();
+}
+
+/* ---------- provider-dependent fields ---------- */
 
 function updateFieldVisibility() {
   const provider = providerSelect.value;
@@ -101,12 +321,11 @@ function updateFieldVisibility() {
 
 function updateModelPreview() {
   const provider = providerSelect.value;
-  const tier = tierSelect.value;
   if (provider === "nyra-cloud") {
     modelPreviewEl.textContent = "Model choice happens on the shared backend.";
     return;
   }
-  const model = MODEL_MAP[provider]?.[tier];
+  const model = MODEL_MAP[provider]?.[tierSelect.value];
   modelPreviewEl.textContent = model ? `Uses: ${model}` : "";
 }
 
@@ -127,71 +346,35 @@ function updateTargetModelField() {
 }
 
 function updateProjectFolderDisplay(folderPath) {
-  if (folderPath) {
-    projectFolderPathEl.textContent = `Connected: ${folderPath}`;
-    clearFolderButton.classList.remove("hidden");
-  } else {
-    projectFolderPathEl.textContent = "No folder connected.";
-    clearFolderButton.classList.add("hidden");
-  }
+  currentSettings.projectFolder = folderPath || "";
+  projectFolderPathEl.textContent = folderPath
+    ? `Connected: ${folderPath}`
+    : "No folder connected.";
+  clearFolderButton.classList.toggle("hidden", !folderPath);
+  refreshDerivedUI();
 }
+
+/* ---------- events ---------- */
 
 providerSelect.addEventListener("change", () => {
   updateFieldVisibility();
   updateModelPreview();
+  save({ immediate: true });
 });
-tierSelect.addEventListener("change", updateModelPreview);
-
+tierSelect.addEventListener("change", () => {
+  updateModelPreview();
+  save({ immediate: true });
+});
 targetAgentSelect.addEventListener("change", () => {
   targetModelNameInput.value = "";
   updateTargetModelField();
+  save({ immediate: true });
 });
+automationEnabledCheckbox.addEventListener("change", () => save({ immediate: true }));
 
-hotkeyInput.addEventListener("focus", () => {
-  setHotkeyHint("Press your combo now…", "#6b7383");
+[targetModelNameInput, apiKeyInput, ollamaUrlInput, backendUrlInput].forEach((el) => {
+  el.addEventListener("input", () => save());
 });
-
-hotkeyInput.addEventListener("blur", () => {
-  setHotkeyHint("Click the field above, then press the combo you want.", "#6b7383");
-});
-
-hotkeyInput.addEventListener("keydown", async (e) => {
-  e.preventDefault();
-
-  // A modifier held alone isn't a usable combo yet — wait for a real
-  // key on top of it.
-  if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
-
-  const key = codeToAcceleratorKey(e.code);
-  if (!key) {
-    setHotkeyHint("That key can't be used as a shortcut here — try a letter, number, or function key.", "#e5484d");
-    return;
-  }
-
-  const modifiers = [];
-  if (e.ctrlKey || e.metaKey) modifiers.push("CommandOrControl");
-  if (e.altKey) modifiers.push("Alt");
-  if (e.shiftKey) modifiers.push("Shift");
-
-  if (modifiers.length === 0) {
-    setHotkeyHint("Include at least one modifier (Ctrl, Alt, or Shift) — a bare key would be captured everywhere, in every app.", "#e5484d");
-    return;
-  }
-
-  const accelerator = [...modifiers, key].join("+");
-  setHotkeyHint("Checking…", "#6b7383");
-
-  const result = await window.nyra.setHotkey(accelerator);
-  if (result.ok) {
-    hotkeyInput.value = accelerator;
-    setHotkeyHint("Saved — this hotkey is active now.", "#6fcf97");
-    updateSubtitle();
-  } else {
-    setHotkeyHint(result.error || "That combo didn't register — try another.", "#e5484d");
-  }
-});
-
-automationEnabledCheckbox.addEventListener("change", updateSubtitle);
 
 testAutomationButton.addEventListener("click", async () => {
   automationTestResultEl.textContent = "Testing… don't touch the keyboard for a moment.";
@@ -201,13 +384,41 @@ testAutomationButton.addEventListener("click", async () => {
   const result = await window.nyra.testAutomation();
   testAutomationButton.disabled = false;
 
+  automationTestResultEl.textContent = result.ok
+    ? "Passed — automation works on this machine."
+    : `Failed: ${result.reason}`;
+  automationTestResultEl.style.color = result.ok ? "#6fcf97" : "#e5484d";
+});
+
+tryItRun.addEventListener("click", async () => {
+  const text = tryItInput.value.trim() || tryItInput.placeholder;
+  tryItRun.disabled = true;
+  tryItRun.textContent = "Compiling…";
+  tryItResult.classList.remove("hidden");
+  tryItResult.textContent = "";
+  tryItResult.style.color = "#6b7383";
+  tryItMeta.classList.add("hidden");
+
+  const result = await window.nyra.compileTest(text);
+
+  tryItRun.disabled = false;
+  tryItRun.textContent = "Compile";
+
   if (result.ok) {
-    automationTestResultEl.textContent = "Passed — automation works on this machine.";
-    automationTestResultEl.style.color = "#6fcf97";
+    tryItResult.textContent = result.compiled;
+    tryItResult.style.color = "#c3c9d3";
+    tryItMeta.textContent = result.tunedFor
+      ? `Tuned for ${result.tunedFor} — switch agent above to compare`
+      : "No target agent set — generic output";
+    tryItMeta.classList.remove("hidden");
   } else {
-    automationTestResultEl.textContent = `Failed: ${result.reason}`;
-    automationTestResultEl.style.color = "#e5484d";
+    tryItResult.textContent = result.error;
+    tryItResult.style.color = "#e5484d";
   }
+});
+
+tryItInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") tryItRun.click();
 });
 
 chooseFolderButton.addEventListener("click", async () => {
@@ -220,59 +431,35 @@ clearFolderButton.addEventListener("click", async () => {
   updateProjectFolderDisplay(null);
 });
 
+/* ---------- boot ---------- */
+
 async function loadSettings() {
   const settings = await window.nyra.getSettings();
+  currentSettings = { ...settings };
+
   providerSelect.value = settings.provider || "";
   tierSelect.value = settings.tier || "fast";
   targetAgentSelect.value = settings.targetAgent || "";
   targetModelNameInput.value = settings.targetModelName || "";
-  updateTargetModelField();
-  hotkeyInput.value = settings.hotkey || "";
+  apiKeyInput.value = settings.apiKey || "";
+  ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
+  backendUrlInput.value = settings.backendUrl || "";
 
   const automationSupported = settings.platform === "win32";
   automationSection.classList.toggle("hidden", !automationSupported);
   automationUnavailableHint.classList.toggle("hidden", automationSupported);
   automationEnabledCheckbox.checked = automationSupported && Boolean(settings.automationEnabled);
-  updateSubtitle();
 
-  apiKeyInput.value = settings.apiKey || "";
-  ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
-  backendUrlInput.value = settings.backendUrl || "";
+  renderHotkeyKeys(settings.hotkey);
+  updateTargetModelField();
   updateFieldVisibility();
   updateModelPreview();
   updateProjectFolderDisplay(settings.projectFolder || null);
+  refreshDerivedUI();
 }
 
-saveButton.addEventListener("click", async () => {
-  const provider = providerSelect.value;
-  const tier = tierSelect.value;
-  const targetAgent = targetAgentSelect.value;
-  const targetModelName = targetModelNameInput.value.trim();
-  const automationEnabled = automationEnabledCheckbox.checked;
-  const apiKey = apiKeyInput.value.trim();
-  const ollamaUrl = ollamaUrlInput.value.trim() || "http://localhost:11434";
-  const backendUrl = backendUrlInput.value.trim();
-
-  if (!provider) {
-    statusEl.textContent = "Pick a provider.";
-    statusEl.style.color = "#e5484d";
-    return;
-  }
-  if (provider !== "local" && provider !== "nyra-cloud" && !apiKey) {
-    statusEl.textContent = "Enter an API key for this provider.";
-    statusEl.style.color = "#e5484d";
-    return;
-  }
-  if (provider === "nyra-cloud" && !backendUrl) {
-    statusEl.textContent = "Enter the Nyra Cloud backend URL.";
-    statusEl.style.color = "#e5484d";
-    return;
-  }
-
-  await window.nyra.saveSettings({ provider, tier, targetAgent, targetModelName, automationEnabled, apiKey, ollamaUrl, backendUrl });
-  updateSubtitle();
-  statusEl.textContent = `Saved. Nyra is ready \u2014 ${hotkeyInput.value || "your hotkey"} anywhere.`;
-  statusEl.style.color = "#6fcf97";
-});
+// The tray can change auto-paste and the target agent while this
+// window is open — reload rather than let the two disagree.
+window.nyra.onSettingsChanged(() => loadSettings());
 
 loadSettings();

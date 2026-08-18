@@ -7,113 +7,175 @@
 </head>
 <body>
   <h1>Nyra</h1>
-  <p class="subtitle" id="subtitle">Select text anywhere, Ctrl+C, then Alt+P to compile it.</p>
 
-  <label for="provider">Model provider</label>
-  <select id="provider">
-    <option value="">Choose a provider&hellip;</option>
-    <option value="nyra-cloud">Nyra Cloud (free, shared &mdash; no key needed)</option>
-    <option value="local">Local (Ollama &mdash; free, no rate limit)</option>
-    <option value="groq">Groq (free, large models &mdash; rate limited)</option>
-    <option value="openai">OpenAI</option>
-    <option value="anthropic">Anthropic</option>
-    <option value="gemini">Google</option>
-  </select>
-
-  <label for="tier">Model tier</label>
-  <select id="tier">
-    <option value="fast">Fast &amp; cheap (default)</option>
-    <option value="quality">High quality (slower, costs more)</option>
-  </select>
-  <p class="hint" id="modelPreview"></p>
-
-  <label for="targetAgent">AI agent <span class="hint">(optional)</span></label>
-  <select id="targetAgent">
-    <option value="">Generic (no specific agent)</option>
-    <option value="Claude">Claude (Anthropic)</option>
-    <option value="ChatGPT">ChatGPT (OpenAI)</option>
-    <option value="Gemini">Gemini (Google)</option>
-    <option value="Other">Other / not listed</option>
-  </select>
-
-  <label for="targetModelName">Model <span class="hint">(optional)</span></label>
-  <input id="targetModelName" type="text" list="targetModelNameSuggestions" />
-  <datalist id="targetModelNameSuggestions"></datalist>
-  <p class="hint">
-    Tailors phrasing and structure (e.g. XML tags for Claude, Markdown
-    for ChatGPT) to the exact agent/model you'll paste the result
-    into. Pick a suggestion or type any model name, including ones
-    not listed — Nyra doesn't need to know about a model in advance
-    to tune for it. Leave the model blank to tune for the agent only,
-    or leave both blank for a generic, model-agnostic prompt.
-  </p>
-
-  <div id="localFields" class="hidden">
-    <label for="ollamaUrl">Ollama server URL</label>
-    <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
+  <div class="status-line">
+    <span class="status-dot ready" id="statusDot"></span>
+    <span class="status-title" id="statusTitle">Ready</span>
+    <span class="status-detail" id="statusDetail"></span>
   </div>
 
-  <div id="cloudFields" class="hidden">
-    <label for="backendUrl">Nyra Cloud backend URL</label>
-    <input id="backendUrl" type="text" placeholder="https://your-backend.onrender.com" />
-    <p class="hint">
-      Whoever set up Nyra Cloud shares this URL with you \u2014 no API
-      key needed on your end, but it's a shared free quota, so it may
-      occasionally be busy.
-    </p>
+  <div class="section">
+    <button class="section-header" id="tryItHeader" aria-expanded="false" aria-controls="tryItBody">
+      <span class="section-header-left">
+        <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 L7 5 L3.5 8.5"></path></svg>
+        <span class="section-title">Try it</span>
+      </span>
+      <span class="section-summary">Compile a test prompt here</span>
+    </button>
+    <div class="section-body try-it-body hidden" id="tryItBody">
+      <input id="tryItInput" type="text" placeholder="write email about delayed package" />
+      <button id="tryItRun" class="primary">Compile</button>
+      <div class="try-it-result hidden" id="tryItResult"></div>
+      <p class="try-it-meta hidden" id="tryItMeta"></p>
+    </div>
   </div>
 
-  <div id="apiKeyField">
-    <label for="apiKey">API key</label>
-    <input id="apiKey" type="password" placeholder="Paste your API key" />
-    <p class="hint hidden" id="groqHint">
-      Groq's key is free (no card) and runs large models fast, but is
-      rate-limited (~30 req/min, ~1,000/day).
-    </p>
+  <div class="section">
+    <button class="section-header" id="providerHeader" aria-expanded="false" aria-controls="providerBody">
+      <span class="section-header-left">
+        <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 L7 5 L3.5 8.5"></path></svg>
+        <span class="section-title">Provider &amp; API key</span>
+      </span>
+      <span class="section-summary" id="providerSummary"></span>
+    </button>
+    <div class="section-body hidden" id="providerBody">
+      <label for="provider">Model provider</label>
+      <select id="provider">
+        <option value="">Choose a provider&hellip;</option>
+        <option value="nyra-cloud">Nyra Cloud (free, shared &mdash; no key needed)</option>
+        <option value="local">Local (Ollama &mdash; free, no rate limit)</option>
+        <option value="groq">Groq (free, large models &mdash; rate limited)</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="gemini">Google</option>
+      </select>
+
+      <label for="tier">Model tier</label>
+      <select id="tier">
+        <option value="fast">Fast &amp; cheap (default)</option>
+        <option value="quality">High quality (slower, costs more)</option>
+      </select>
+      <p class="hint" id="modelPreview"></p>
+
+      <div id="localFields" class="hidden">
+        <label for="ollamaUrl">Ollama server URL</label>
+        <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
+      </div>
+
+      <div id="cloudFields" class="hidden">
+        <label for="backendUrl">Nyra Cloud backend URL</label>
+        <input id="backendUrl" type="text" placeholder="https://your-backend.onrender.com" />
+        <p class="hint">
+          Whoever set up Nyra Cloud shares this URL with you &mdash; no API
+          key needed on your end, but it's a shared free quota, so it may
+          occasionally be busy.
+        </p>
+      </div>
+
+      <div id="apiKeyField">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" placeholder="Paste your API key" />
+        <p class="hint hidden" id="groqHint">
+          Groq's key is free (no card) and runs large models fast, but is
+          rate-limited (~30 req/min, ~1,000/day).
+        </p>
+      </div>
+    </div>
   </div>
 
-  <button id="save">Save</button>
-  <p id="status" class="status"></p>
+  <div class="section">
+    <button class="section-header" id="tuningHeader" aria-expanded="false" aria-controls="tuningBody">
+      <span class="section-header-left">
+        <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 L7 5 L3.5 8.5"></path></svg>
+        <span class="section-title">Prompt tuning</span>
+      </span>
+      <span class="section-summary" id="tuningSummary"></span>
+    </button>
+    <div class="section-body hidden" id="tuningBody">
+      <label for="targetAgent">AI agent <span class="hint">(optional)</span></label>
+      <select id="targetAgent">
+        <option value="">Generic (no specific agent)</option>
+        <option value="Claude">Claude (Anthropic)</option>
+        <option value="ChatGPT">ChatGPT (OpenAI)</option>
+        <option value="Gemini">Gemini (Google)</option>
+        <option value="Other">Other / not listed</option>
+      </select>
 
-  <hr />
-
-  <label for="hotkeyInput">Hotkey</label>
-  <input id="hotkeyInput" type="text" readonly placeholder="Click, then press a key combo…" />
-  <p class="hint" id="hotkeyHint">Click the field above, then press the combo you want.</p>
-
-  <hr />
-
-  <div id="automationSection">
-    <label>
-      <input id="automationEnabled" type="checkbox" />
-      Auto select, copy &amp; paste <span class="hint">(Windows, experimental)</span>
-    </label>
-    <p class="hint">
-      When on, the hotkey selects everything in the focused field,
-      copies it, compiles it, and pastes the result back automatically
-      &mdash; no manual Ctrl+C/Ctrl+V. Off by default: test it first.
-      Skips anything over ~8,000 characters (that's a document, not a
-      prompt) rather than risk replacing it.
-    </p>
-    <button id="testAutomation" class="secondary">Test automation&hellip;</button>
-    <p class="hint" id="automationTestResult"></p>
+      <label for="targetModelName">Model <span class="hint">(optional)</span></label>
+      <input id="targetModelName" type="text" list="targetModelNameSuggestions" />
+      <datalist id="targetModelNameSuggestions"></datalist>
+      <p class="hint">
+        Tailors phrasing and structure (e.g. XML tags for Claude, Markdown
+        for ChatGPT) to the agent/model you'll paste into. Type any model
+        name, including ones not listed.
+      </p>
+    </div>
   </div>
-  <p class="hint hidden" id="automationUnavailableHint">Automation isn't available on this platform yet &mdash; use the manual Ctrl+C / hotkey / Ctrl+V flow above.</p>
 
-  <hr />
+  <div class="section">
+    <button class="section-header" id="behaviorHeader" aria-expanded="false" aria-controls="behaviorBody">
+      <span class="section-header-left">
+        <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 L7 5 L3.5 8.5"></path></svg>
+        <span class="section-title">Behavior</span>
+      </span>
+      <span class="section-summary" id="behaviorSummary"></span>
+    </button>
+    <div class="section-body hidden" id="behaviorBody">
+      <label for="hotkeyField">Hotkey</label>
+      <button type="button" class="hotkey-field" id="hotkeyField">
+        <span class="hotkey-keys" id="hotkeyKeys"></span>
+        <span class="hotkey-side-text" id="hotkeySideText">Click to change</span>
+      </button>
+      <p class="hint" id="hotkeyHint"></p>
 
-  <label>Project context <span class="hint">(optional)</span></label>
-  <p class="hint">
-    Connect a folder of your own notes/docs. Nyra pulls in relevant
-    snippets when compiling, so the result reflects real details
-    instead of generic phrasing.
-  </p>
-  <p class="hint" id="projectFolderPath">No folder connected.</p>
-  <button id="chooseFolder" class="secondary">Choose Folder&hellip;</button>
-  <button id="clearFolder" class="secondary hidden">Disconnect</button>
+      <div id="automationSection" style="margin-top: 10px;">
+        <div class="toggle-row">
+          <span class="toggle-label">
+            <span class="toggle-label-title">Auto select, copy &amp; paste</span>
+            <span class="toggle-label-sub">Windows &middot; one keypress, no Ctrl+C/V</span>
+          </span>
+          <label class="toggle">
+            <input id="automationEnabled" type="checkbox" />
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <p class="hint" style="margin-top: 6px;">
+          Skips anything over ~8,000 characters (that's a document, not a
+          prompt) rather than risk replacing it.
+        </p>
+        <button id="testAutomation" class="secondary" style="margin-top: 6px;">Test automation&hellip;</button>
+        <p class="hint" id="automationTestResult"></p>
+      </div>
+      <p class="hint hidden" id="automationUnavailableHint">
+        Automatic paste isn't available on this platform yet &mdash; use
+        Ctrl+C, the hotkey, then Ctrl+V.
+      </p>
+    </div>
+  </div>
 
-  <hr />
-  <p class="hint">Close this window any time &mdash; Nyra keeps running in the tray/menu bar.</p>
+  <div class="section">
+    <button class="section-header" id="contextHeader" aria-expanded="false" aria-controls="contextBody">
+      <span class="section-header-left">
+        <svg class="chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 L7 5 L3.5 8.5"></path></svg>
+        <span class="section-title">Project context</span>
+      </span>
+      <span class="section-summary" id="contextSummary"></span>
+    </button>
+    <div class="section-body hidden" id="contextBody">
+      <p class="hint">
+        Connect a folder of your own notes/docs. Nyra pulls in relevant
+        snippets when compiling, so the result reflects real details
+        instead of generic phrasing.
+      </p>
+      <p class="hint" id="projectFolderPath">No folder connected.</p>
+      <button id="chooseFolder" class="secondary" style="margin-top: 6px;">Choose Folder&hellip;</button>
+      <button id="clearFolder" class="secondary hidden" style="margin-top: 6px;">Disconnect</button>
+    </div>
+  </div>
+
+  <p class="hint" id="saveIndicator" style="margin-top: 12px;">Changes save as you make them.</p>
+
+  <script src="settings.js"></script>
 </body>
-<script src="settings.js"></script>
 </html>

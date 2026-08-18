@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld("nyra", {
   saveSettings: (settings) => ipcRenderer.invoke("nyra:save-settings", settings),
   setHotkey: (accelerator) => ipcRenderer.invoke("nyra:set-hotkey", accelerator),
   testAutomation: () => ipcRenderer.invoke("nyra:test-automation"),
+  compileTest: (text) => ipcRenderer.invoke("nyra:compile-test", text),
+  onSettingsChanged: (handler) =>
+    ipcRenderer.on("nyra:settings-changed", () => handler()),
   chooseProjectFolder: () => ipcRenderer.invoke("nyra:choose-project-folder"),
   clearProjectFolder: () => ipcRenderer.invoke("nyra:clear-project-folder"),
 });

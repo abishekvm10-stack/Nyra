@@ -84,21 +84,26 @@ const MODEL_MAP = {
   gemini: { fast: "gemini-flash-latest", quality: "gemini-pro-latest" },
 };
 
+// UI collects agent + specific model as two separate fields (see
+// settings.html); combined here into one descriptive string since
+// getTargetModelGuidance() below only needs free text to match
+// against, not a structured shape. "Other" is a UI category label for
+// "not in our list", not part of the description itself — the model
+// name field is where the user typed the actual full name (e.g.
+// "Grok 4"), so use that alone rather than prefixing "Other". Exported
+// so main.js's "Try it" preview can show the same tuned-for label
+// without re-deriving this logic a second time.
+function getTargetModelLabel({ targetAgent = "", targetModelName = "" } = {}) {
+  return targetAgent === "Other"
+    ? targetModelName
+    : [targetAgent, targetModelName].filter(Boolean).join(" ").trim();
+}
+
 async function compilePrompt(rawText, settings, projectContext = "") {
-  const { provider, tier, targetAgent = "", targetModelName = "", apiKey, ollamaUrl, backendUrl } = settings;
+  const { provider, tier, apiKey, ollamaUrl, backendUrl } = settings;
   if (!provider) throw new Error("No provider selected. Open Settings first.");
 
-  // UI collects agent + specific model as two separate fields (see
-  // settings.html); combined here into one descriptive string since
-  // getTargetModelGuidance() below only needs free text to match
-  // against, not a structured shape. "Other" is a UI category label
-  // for "not in our list", not part of the description itself — the
-  // model name field is where the user typed the actual full name
-  // (e.g. "Grok 4"), so use that alone rather than prefixing "Other".
-  const targetModel =
-    targetAgent === "Other"
-      ? targetModelName
-      : [targetAgent, targetModelName].filter(Boolean).join(" ").trim();
+  const targetModel = getTargetModelLabel(settings);
 
   const model = MODEL_MAP[provider]?.[tier || "fast"];
   if (!model) throw new Error(`No model configured for ${provider} / ${tier}.`);
@@ -263,4 +268,4 @@ async function callGemini(rawText, model, apiKey, targetModel) {
   return data.candidates[0].content.parts[0].text.trim();
 }
 
-module.exports = { compilePrompt, MODEL_MAP };
+module.exports = { compilePrompt, MODEL_MAP, getTargetModelLabel };

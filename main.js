@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification,
 const path = require("path");
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
-const { compilePrompt } = require("./compiler");
+const { compilePrompt, getTargetModelLabel } = require("./compiler");
 const { getRelevantContext } = require("./context");
 const automation = require("./automation");
 
@@ -23,6 +23,15 @@ let settingsWindow = null;
 
 const DEFAULT_HOTKEY = "Alt+P";
 const DEFAULT_BACKEND_URL = "https://nyra-pddf.onrender.com";
+
+// Mirrors the agent dropdown in settings.html — kept here so the tray
+// submenu offers the same choices without the renderer being open.
+const TARGET_AGENTS = [
+  { value: "", label: "Generic" },
+  { value: "Claude", label: "Claude" },
+  { value: "ChatGPT", label: "ChatGPT" },
+  { value: "Gemini", label: "Gemini" },
+];
 
 // The hotkey currently registered with the OS, which is not always the
 // same as the stored preference: a saved combo can stop working if
@@ -93,6 +102,11 @@ function getSettings() {
     provider: store.get("provider", ""),
     tier: store.get("tier", "fast"),
     hotkey: currentHotkey(),
+    // True when the active hotkey isn't the one actually saved — it
+    // fell back because the saved combo stopped registering (e.g.
+    // claimed by another app between sessions). Settings' status line
+    // surfaces this instead of silently showing the fallback as normal.
+    hotkeyFallback: activeHotkey !== null && activeHotkey !== store.get("hotkey", DEFAULT_HOTKEY),
     automationEnabled: store.get("automationEnabled", false),
     platform: process.platform,
     targetAgent: store.get("targetAgent", ""),
@@ -359,17 +373,48 @@ function createTray() {
 // Also refreshes the hotkey text, so this is what gets called after a
 // hotkey change to make the tray reflect it immediately.
 function rebuildTrayMenu() {
+  if (!tray) return;
+
   const launchAtStartup = app.isPackaged
     ? app.getLoginItemSettings().openAtLogin
     : false;
+
+  const settings = getSettings();
 
   tray.setToolTip(`Nyra \u2014 ${currentHotkey()} to compile whatever you're typing`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Settings\u2026", click: createSettingsWindow },
       { label: "Restore last original prompt", click: restoreLastOriginal },
-      { label: `Hotkey: ${currentHotkey()}`, enabled: false },
       { type: "separator" },
+      // Auto-paste and target agent are the two things that get
+      // changed day to day; everything else is set-once. Surfacing
+      // them here means normal use never has to open Settings.
+      {
+        label: "Auto-paste",
+        type: "checkbox",
+        checked: Boolean(settings.automationEnabled),
+        enabled: process.platform === "win32" && automation.isAvailable(),
+        click: (item) => {
+          store.set("automationEnabled", item.checked);
+          notifySettingsChanged();
+        },
+      },
+      {
+        label: "Target agent",
+        submenu: TARGET_AGENTS.map((agent) => ({
+          label: agent.label,
+          type: "radio",
+          checked: (settings.targetAgent || "") === agent.value,
+          click: () => {
+            store.set("targetAgent", agent.value);
+            store.set("targetModelName", "");
+            notifySettingsChanged();
+          },
+        })),
+      },
+      { type: "separator" },
+      { label: `Hotkey: ${currentHotkey()}`, enabled: false },
       {
         label: "Launch at startup",
         type: "checkbox",
@@ -383,6 +428,13 @@ function rebuildTrayMenu() {
       { label: "Quit Nyra", click: () => app.quit() },
     ])
   );
+}
+
+// A tray change and an open Settings window can disagree about the
+// truth otherwise \u2014 rebuild the menu and tell the window to reload.
+function notifySettingsChanged() {
+  rebuildTrayMenu();
+  if (settingsWindow) settingsWindow.webContents.send("nyra:settings-changed");
 }
 
 app.whenReady().then(() => {
@@ -424,11 +476,13 @@ app.on("window-all-closed", (e) => e?.preventDefault?.());
 ipcMain.handle("nyra:get-settings", () => getSettings());
 ipcMain.handle("nyra:save-settings", (_event, settings) => {
   store.set(settings);
+  rebuildTrayMenu(); // keep the tray's quick-toggles in step with the window
   return true;
 });
-// Separate from save-settings: a hotkey needs to be validated against
-// the OS the moment it's captured (so a taken combo is caught right
-// there), not deferred until the user clicks Save.
+// Separate from save-settings: a hotkey needs synchronous validation
+// against the OS (globalShortcut.register succeeds or fails right
+// there) with the result shown inline, not folded into the generic
+// fire-and-forget settings write.
 ipcMain.handle("nyra:set-hotkey", (_event, accelerator) => {
   const result = registerHotkey(accelerator);
   if (result.ok) {
@@ -438,6 +492,24 @@ ipcMain.handle("nyra:set-hotkey", (_event, accelerator) => {
   return result;
 });
 ipcMain.handle("nyra:test-automation", () => runAutomationSelfTest());
+// Powers the "Try it" box: compiles without touching the clipboard or
+// the user's focused app, so they can see what a settings change
+// actually does to the output without leaving the window.
+ipcMain.handle("nyra:compile-test", async (_event, text) => {
+  const settings = getSettings();
+  if (!settings.provider) {
+    return { ok: false, error: "Pick a provider first." };
+  }
+  try {
+    const projectContext = settings.projectFolder
+      ? getRelevantContext(settings.projectFolder, text)
+      : "";
+    const compiled = await compilePrompt(text, settings, projectContext);
+    return { ok: true, compiled, tunedFor: getTargetModelLabel(settings) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+});
 ipcMain.handle("nyra:choose-project-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
   if (result.canceled || !result.filePaths.length) return null;
