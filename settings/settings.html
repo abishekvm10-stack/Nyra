@@ -234,9 +234,19 @@
                 <div class="row-control">
                   <select id="targetAgent">
                     <option value="">Generic (no specific agent)</option>
-                    <option value="Claude">Claude (Anthropic)</option>
-                    <option value="ChatGPT">ChatGPT (OpenAI)</option>
-                    <option value="Gemini">Gemini (Google)</option>
+                    <optgroup label="Chat models">
+                      <option value="Claude">Claude (Anthropic)</option>
+                      <option value="ChatGPT">ChatGPT (OpenAI)</option>
+                      <option value="Gemini">Gemini (Google)</option>
+                    </optgroup>
+                    <optgroup label="Coding agents">
+                      <option value="opencode">opencode</option>
+                      <option value="Claude Code">Claude Code</option>
+                      <option value="Cursor">Cursor</option>
+                      <option value="Aider">Aider</option>
+                      <option value="GitHub Copilot">GitHub Copilot</option>
+                      <option value="Codex">Codex</option>
+                    </optgroup>
                     <option value="Other">Other / not listed</option>
                   </select>
                 </div>
@@ -251,10 +261,30 @@
                   <datalist id="targetModelNameSuggestions"></datalist>
                 </div>
               </div>
+              <div class="row">
+                <div class="row-label">
+                  <span class="row-title">Task type</span>
+                  <span class="row-sub">Auto-detects by default</span>
+                </div>
+                <div class="row-control">
+                  <select id="taskType">
+                    <option value="auto">Auto</option>
+                    <option value="code">Code</option>
+                    <option value="writing">Writing</option>
+                    <option value="analysis">Analysis</option>
+                    <option value="research">Research</option>
+                    <option value="creative">Creative</option>
+                    <option value="general">General</option>
+                  </select>
+                </div>
+              </div>
               <p class="hint">
                 Tailors phrasing and structure (e.g. XML tags for Claude,
-                Markdown for ChatGPT) to the agent/model you'll paste into.
-                Type any model name, including ones not listed.
+                Markdown for ChatGPT, acceptance criteria for coding agents)
+                to the agent/model you'll paste into. Type any model name,
+                including ones not listed. Nyra detects the task type (code,
+                writing, etc.) automatically — override it here if it keeps
+                guessing wrong for how you use it.
               </p>
             </div>
 

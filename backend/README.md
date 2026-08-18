@@ -34,12 +34,24 @@ sharing with a friend; not something you'd want for a product with
 real daily active users without upgrading off the free tier.
 
 ## Testing it directly (optional, useful for debugging)
+
+The current desktop app builds its own system prompt and sends it as
+`systemPrompt` — this is the request shape it actually sends:
+```
+curl -X POST https://your-backend-url.onrender.com/compile \
+  -H "Content-Type: application/json" \
+  -d '{"text": "write email about delayed package", "tier": "fast", "systemPrompt": "You are a prompt compiler..."}'
+```
+
+Without `systemPrompt`, the server falls back to its own older built-in
+prompt (kept only for app versions older than this split) — useful for
+a quick smoke test without needing a real prompt string:
 ```
 curl -X POST https://your-backend-url.onrender.com/compile \
   -H "Content-Type: application/json" \
   -d '{"text": "write email about delayed package", "tier": "fast"}'
 ```
-Should return JSON like `{"compiledText": "Role: ...`.
+Either way, should return JSON like `{"compiledText": "Role: ...`.
 
 ## Local testing before deploying
 ```

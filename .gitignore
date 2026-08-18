@@ -7,3 +7,7 @@ backend/.env
 
 # Electron user data and local settings
 *.json.bak
+
+# eval harness run output (tools/eval-prompts.js --live) — the scripts
+# themselves are tracked, their dumped results are not
+tools/eval-output/

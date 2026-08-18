@@ -23,6 +23,10 @@ const MODEL_SUGGESTIONS_BY_AGENT = {
   Claude: ["Sonnet 5", "Opus 5", "Fable 5", "Haiku 4.5"],
   ChatGPT: ["GPT-5", "GPT-4o", "o3"],
   Gemini: ["Gemini 3 Pro", "Gemini 3 Flash"],
+  opencode: ["Sonnet 5", "GPT-5", "Grok Code Fast"],
+  "Claude Code": ["Sonnet 5", "Opus 5"],
+  Cursor: ["Sonnet 5", "GPT-5"],
+  "GitHub Copilot": ["GPT-5", "Sonnet 5"],
 };
 
 // Named keys accelerators accept beyond plain letters/digits/function
@@ -41,6 +45,7 @@ const $ = (id) => document.getElementById(id);
 const providerRadios = document.querySelectorAll('input[name="provider"]');
 const tierSelect = $("tier");
 const targetAgentSelect = $("targetAgent");
+const taskTypeSelect = $("taskType");
 const targetModelNameInput = $("targetModelName");
 const targetModelNameSuggestions = $("targetModelNameSuggestions");
 const apiKeyInput = $("apiKey");
@@ -325,6 +330,7 @@ function collectSettings() {
     tier: tierSelect.value,
     targetAgent: targetAgentSelect.value,
     targetModelName: targetModelNameInput.value.trim(),
+    taskType: taskTypeSelect.value,
     automationEnabled: automationEnabledCheckbox.checked,
     saveHistory: saveHistoryCheckbox.checked,
     apiKey: apiKeyInput.value.trim(),
@@ -462,6 +468,7 @@ targetAgentSelect.addEventListener("change", () => {
   updateTargetModelField();
   save({ immediate: true });
 });
+taskTypeSelect.addEventListener("change", () => save({ immediate: true }));
 automationEnabledCheckbox.addEventListener("change", () => save({ immediate: true }));
 
 [targetModelNameInput, apiKeyInput, ollamaUrlInput, backendUrlInput].forEach((el) => {
@@ -553,6 +560,7 @@ async function loadSettings() {
   tierSelect.value = settings.tier || "fast";
   targetAgentSelect.value = settings.targetAgent || "";
   targetModelNameInput.value = settings.targetModelName || "";
+  taskTypeSelect.value = settings.taskType || "auto";
   apiKeyInput.value = settings.apiKey || "";
   ollamaUrlInput.value = settings.ollamaUrl || "http://localhost:11434";
   backendUrlInput.value = settings.backendUrl || "";

@@ -107,6 +107,11 @@ function addHistoryEntry(entry) {
   history.unshift({
     id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
     at: new Date().toISOString(),
+    // Marks entries compiled with the task/agent-adaptive prompt-kit
+    // system (vs. the older fixed five-field template) — entries
+    // saved before this field existed simply lack it, which reads as
+    // "v1" without needing a migration.
+    promptVersion: 2,
     ...entry,
   });
   store.set("history", history.slice(0, MAX_HISTORY_ENTRIES));
@@ -127,6 +132,7 @@ function getSettings() {
     platform: process.platform,
     targetAgent: store.get("targetAgent", ""),
     targetModelName: store.get("targetModelName", ""),
+    taskType: store.get("taskType", "auto"),
     apiKey: store.get("apiKey", ""),
     ollamaUrl: store.get("ollamaUrl", "http://localhost:11434"),
     backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),

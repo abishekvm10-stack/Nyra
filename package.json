@@ -20,7 +20,7 @@
   "build": {
     "appId": "com.nyra.desktop",
     "productName": "Nyra",
-    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md", "!MEMORY.md"],
+    "files": ["**/*", "!README.md", "!BUILD-GUIDE.md", "!PROJECT-SPEC.md", "!MEMORY.md", "!tools/**"],
     "asarUnpack": ["**/node_modules/@nut-tree-fork/**/*", "**/node_modules/@nut-tree/**/*"],
     "win": {
       "target": "nsis",
@@ -43,6 +43,7 @@
         "!BUILD-GUIDE.md",
         "!PROJECT-SPEC.md",
         "!MEMORY.md",
+        "!tools/**",
         "!node_modules/@nut-tree-fork/**",
         "!node_modules/@nut-tree/**"
       ]

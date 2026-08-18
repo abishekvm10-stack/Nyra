@@ -2,75 +2,12 @@
 // ported to run in an Electron main process (plain Node, no chrome.*
 // APIs). One function, one job: take rough text + the user's chosen
 // provider/tier settings, return a structured prompt.
+//
+// All actual prompt-building (system prompt, task/agent adaptation,
+// injection defense, output sanitizing) lives in prompt-kit.js — this
+// file just wires it to each provider's API shape.
 
-const SYSTEM_PROMPT = `You are a prompt compiler. Rewrite the user's rough
-input into a structured, model-ready prompt using exactly these five
-labeled fields, each on its own line:
-
-Role: <who the AI should act as>
-Context: <the concrete situation, filled in from what the user gave you>
-Task: <the specific action to perform>
-Constraints: <format, tone, length, or content rules>
-Output Format: <exactly what the response should look like>
-
-Your response must start with "Role:" as the very first characters,
-with no punctuation, dash, bullet, or repeated fragment of the user's
-original input before it. Do not echo or quote any part of the raw
-input outside of the five fields themselves. Only output those five
-fields. Do not add commentary before or after. If the user's input is
-missing a detail, make the most reasonable assumption rather than
-leaving a field vague.
-
-Sometimes you will also be given snippets from the user's own project
-files, labeled "Project context." Use those snippets to make the
-Context field specific and accurate \u2014 real names, terms, and details
-from the snippets instead of generic phrasing \u2014 but only when they're
-actually relevant to the request. Never invent details that aren't in
-either the user's input or the provided project context, and ignore
-the project context entirely if it doesn't relate to the request.`;
-
-// Hints for well-known model families, matched by substring against
-// whatever the user typed into the free-text "target model" field.
-// Deliberately NOT a list of every specific model (Sonnet 5, GPT-5,
-// etc.) — that list would need a code update every time a provider
-// ships or renames a model (this bit us once already with Groq's
-// Llama 3.1/3.3 deprecation). Family-level hints stay valid across
-// model versions, and getTargetModelGuidance() below falls back to
-// the compiling model's own knowledge for anything unrecognized,
-// including models that don't exist yet.
-const KNOWN_MODEL_FAMILY_HINTS = [
-  {
-    match: /claude/i,
-    hint: "This is a Claude-family model. It follows XML-style tags well (e.g. <instructions>, <context>, <criteria>) and handles nuanced, clearly-reasoned instructions gracefully. Keep the five labeled fields, and use such tags inside a field's value where it adds clarity.",
-  },
-  {
-    match: /gpt|chatgpt|openai|^o[1-9](\D|$)/i,
-    hint: "This is a GPT/ChatGPT-family model. It responds well to direct, explicit instructions and Markdown-formatted structure. Keep the five labeled fields, and make the Output Format field explicit about any Markdown structure expected in the response.",
-  },
-  {
-    match: /gemini/i,
-    hint: "This is a Gemini-family model. It benefits from concrete context and unambiguous, step-by-step task instructions stated plainly. Keep the five labeled fields, and spell out multi-step tasks as an explicit sequence.",
-  },
-  {
-    match: /llama|qwen|mistral|deepseek|phi-|ollama/i,
-    hint: "This is likely a smaller open-weight model. Favor short, explicit, unambiguous instructions over nuance or implication — don't rely on the model inferring intent it isn't told directly.",
-  },
-];
-
-function getTargetModelGuidance(targetModel) {
-  const trimmed = (targetModel || "").trim();
-  if (!trimmed || /^generic$/i.test(trimmed)) {
-    return "No specific target model was given — use a clear, model-agnostic style with no target-specific syntax.";
-  }
-  const known = KNOWN_MODEL_FAMILY_HINTS.find((f) => f.match.test(trimmed));
-  const base = `The compiled prompt is intended to be pasted into: ${trimmed}.`;
-  if (known) return `${base} ${known.hint}`;
-  return `${base} You may not have specific tuning data for this exact model — use your best general knowledge of how models in its likely family/lineage tend to behave (instruction style, structure preferences, verbosity), and fall back to universal structured-prompting best practices for anything uncertain.`;
-}
-
-function getSystemPrompt(targetModel) {
-  return `${SYSTEM_PROMPT}\n\nTarget model guidance: ${getTargetModelGuidance(targetModel)}`;
-}
+const { buildSystemPrompt, wrapUserInput, sanitizeCompiledText } = require("./prompt-kit");
 
 // Same tiering idea as the extension: local = free + unlimited
 // (capped only by your hardware), groq = free but rate-limited,
@@ -84,15 +21,23 @@ const MODEL_MAP = {
   gemini: { fast: "gemini-flash-latest", quality: "gemini-pro-latest" },
 };
 
+// Every provider call uses the same low temperature (consistent,
+// predictable compiling rather than creative variance) and the same
+// token ceiling. The old code capped Anthropic alone at 500 — tight
+// enough to silently truncate a rich compiled prompt — while every
+// other provider was uncapped; this makes all providers consistent.
+const COMPILE_TEMPERATURE = 0.2;
+const COMPILE_MAX_TOKENS = 1500;
+
 // UI collects agent + specific model as two separate fields (see
 // settings.html); combined here into one descriptive string since
-// getTargetModelGuidance() below only needs free text to match
-// against, not a structured shape. "Other" is a UI category label for
-// "not in our list", not part of the description itself — the model
-// name field is where the user typed the actual full name (e.g.
-// "Grok 4"), so use that alone rather than prefixing "Other". Exported
-// so main.js's "Try it" preview can show the same tuned-for label
-// without re-deriving this logic a second time.
+// buildSystemPrompt() only needs free text to match against, not a
+// structured shape. "Other" is a UI category label for "not in our
+// list", not part of the description itself — the model name field is
+// where the user typed the actual full name (e.g. "Grok 4"), so use
+// that alone rather than prefixing "Other". Exported so main.js's
+// "Try it" preview can show the same tuned-for label without
+// re-deriving this logic a second time.
 function getTargetModelLabel({ targetAgent = "", targetModelName = "" } = {}) {
   return targetAgent === "Other"
     ? targetModelName
@@ -100,10 +45,11 @@ function getTargetModelLabel({ targetAgent = "", targetModelName = "" } = {}) {
 }
 
 async function compilePrompt(rawText, settings, projectContext = "") {
-  const { provider, tier, apiKey, ollamaUrl, backendUrl } = settings;
+  const { provider, tier, apiKey, ollamaUrl, backendUrl, taskType } = settings;
   if (!provider) throw new Error("No provider selected. Open Settings first.");
 
   const targetModel = getTargetModelLabel(settings);
+  const systemPrompt = buildSystemPrompt(targetModel, taskType);
 
   const model = MODEL_MAP[provider]?.[tier || "fast"];
   if (!model) throw new Error(`No model configured for ${provider} / ${tier}.`);
@@ -115,29 +61,34 @@ async function compilePrompt(rawText, settings, projectContext = "") {
     throw new Error("No backend URL set for Nyra Cloud. Open Settings to add one.");
   }
 
+  // Only the user's own raw text gets the injection-defense wrapper —
+  // project context comes from the user's own selected folder and
+  // isn't the untrusted part of the input (arbitrary clipboard content
+  // is).
+  const wrappedRaw = wrapUserInput(rawText);
   const userMessage = projectContext
-    ? `Project context (use only if relevant, otherwise ignore):\n${projectContext}\n\n---\nUser's rough prompt: ${rawText}`
-    : rawText;
+    ? `Project context (use only if relevant, otherwise ignore):\n${projectContext}\n\n---\n${wrappedRaw}`
+    : wrappedRaw;
 
   let result;
   switch (provider) {
     case "local":
-      result = await callLocal(userMessage, model, ollamaUrl, targetModel);
+      result = await callLocal(userMessage, model, ollamaUrl, systemPrompt);
       break;
     case "nyra-cloud":
-      result = await callNyraCloud(userMessage, tier || "fast", backendUrl, targetModel);
+      result = await callNyraCloud(userMessage, tier || "fast", backendUrl, systemPrompt, targetModel);
       break;
     case "groq":
-      result = await callGroq(userMessage, model, apiKey, targetModel);
+      result = await callGroq(userMessage, model, apiKey, systemPrompt);
       break;
     case "openai":
-      result = await callOpenAI(userMessage, model, apiKey, targetModel);
+      result = await callOpenAI(userMessage, model, apiKey, systemPrompt);
       break;
     case "anthropic":
-      result = await callAnthropic(userMessage, model, apiKey, targetModel);
+      result = await callAnthropic(userMessage, model, apiKey, systemPrompt);
       break;
     case "gemini":
-      result = await callGemini(userMessage, model, apiKey, targetModel);
+      result = await callGemini(userMessage, model, apiKey, systemPrompt);
       break;
     default:
       throw new Error(`Unknown provider: ${provider}`);
@@ -148,13 +99,17 @@ async function compilePrompt(rawText, settings, projectContext = "") {
 // Nyra Cloud: a shared backend (see backend/README.md) that holds one
 // API key server-side, so people using Nyra don't need their own.
 // Shares Groq's free-tier rate limit across everyone using the same
-// backend \u2014 fine for a small group, not a substitute for real scale.
-async function callNyraCloud(rawText, tier, backendUrl, targetModel) {
+// backend — fine for a small group, not a substitute for real scale.
+// Sends the fully-built systemPrompt so the backend never needs its
+// own copy of the prompt logic (and never needs a redeploy when this
+// file changes) — targetModel is still sent alongside for older
+// backend deployments that only understand that field.
+async function callNyraCloud(rawText, tier, backendUrl, systemPrompt, targetModel) {
   const url = `${backendUrl.replace(/\/$/, "")}/compile`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: rawText, tier, targetModel }),
+    body: JSON.stringify({ text: rawText, tier, systemPrompt, targetModel }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -163,17 +118,7 @@ async function callNyraCloud(rawText, tier, backendUrl, targetModel) {
   return data.compiledText;
 }
 
-// Safety net independent of model behavior: no matter what stray
-// character, echoed fragment, or encoding artifact (e.g. a mis-decoded
-// dash showing up as "\u00e2") a model might prepend, this guarantees
-// the text the user actually sees always starts cleanly at "Role:".
-function sanitizeCompiledText(text) {
-  const roleIndex = text.indexOf("Role:");
-  const trimmed = roleIndex > 0 ? text.slice(roleIndex) : text;
-  return trimmed.trim();
-}
-
-async function callLocal(rawText, model, baseUrl, targetModel) {
+async function callLocal(rawText, model, baseUrl, systemPrompt) {
   const url = `${(baseUrl || "http://localhost:11434").replace(/\/$/, "")}/api/chat`;
   const res = await fetch(url, {
     method: "POST",
@@ -181,8 +126,9 @@ async function callLocal(rawText, model, baseUrl, targetModel) {
     body: JSON.stringify({
       model,
       stream: false,
+      options: { temperature: COMPILE_TEMPERATURE },
       messages: [
-        { role: "system", content: getSystemPrompt(targetModel) },
+        { role: "system", content: systemPrompt },
         { role: "user", content: rawText },
       ],
     }),
@@ -194,34 +140,38 @@ async function callLocal(rawText, model, baseUrl, targetModel) {
   return data.message.content.trim();
 }
 
-async function callGroq(rawText, model, apiKey, targetModel) {
+async function callGroq(rawText, model, apiKey, systemPrompt) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
+      temperature: COMPILE_TEMPERATURE,
+      max_tokens: COMPILE_MAX_TOKENS,
       messages: [
-        { role: "system", content: getSystemPrompt(targetModel) },
+        { role: "system", content: systemPrompt },
         { role: "user", content: rawText },
       ],
     }),
   });
   const data = await res.json();
   if (!res.ok) {
-    if (res.status === 429) throw new Error("Groq rate limit hit \u2014 wait a moment or switch tiers.");
+    if (res.status === 429) throw new Error("Groq rate limit hit — wait a moment or switch tiers.");
     throw new Error(data?.error?.message || "Groq request failed");
   }
   return data.choices[0].message.content.trim();
 }
 
-async function callOpenAI(rawText, model, apiKey, targetModel) {
+async function callOpenAI(rawText, model, apiKey, systemPrompt) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
+      temperature: COMPILE_TEMPERATURE,
+      max_tokens: COMPILE_MAX_TOKENS,
       messages: [
-        { role: "system", content: getSystemPrompt(targetModel) },
+        { role: "system", content: systemPrompt },
         { role: "user", content: rawText },
       ],
     }),
@@ -231,7 +181,7 @@ async function callOpenAI(rawText, model, apiKey, targetModel) {
   return data.choices[0].message.content.trim();
 }
 
-async function callAnthropic(rawText, model, apiKey, targetModel) {
+async function callAnthropic(rawText, model, apiKey, systemPrompt) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -241,8 +191,9 @@ async function callAnthropic(rawText, model, apiKey, targetModel) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 500,
-      system: getSystemPrompt(targetModel),
+      temperature: COMPILE_TEMPERATURE,
+      max_tokens: COMPILE_MAX_TOKENS,
+      system: systemPrompt,
       messages: [{ role: "user", content: rawText }],
     }),
   });
@@ -251,14 +202,15 @@ async function callAnthropic(rawText, model, apiKey, targetModel) {
   return data.content[0].text.trim();
 }
 
-async function callGemini(rawText, model, apiKey, targetModel) {
+async function callGemini(rawText, model, apiKey, systemPrompt) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: getSystemPrompt(targetModel) }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: COMPILE_TEMPERATURE, maxOutputTokens: COMPILE_MAX_TOKENS },
         contents: [{ parts: [{ text: rawText }] }],
       }),
     }
