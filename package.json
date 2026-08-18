@@ -1,12 +1,12 @@
 {
   "name": "nyra-desktop",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Nyra \u2014 compiles rough prompts into structured ones, system-wide, via clipboard + a global hotkey.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win",
-    "build:mac": "electron-builder --mac"
+    "build:mac": "electron-builder --mac --arm64"
   },
   "dependencies": {
     "@nut-tree-fork/nut-js": "^4.2.6",
@@ -33,10 +33,19 @@
       "createStartMenuShortcut": true
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": ["dmg"],
       "category": "public.app-category.productivity",
       "artifactName": "Nyra-${version}-${arch}.${ext}",
-      "sign": null
+      "sign": null,
+      "files": [
+        "**/*",
+        "!README.md",
+        "!BUILD-GUIDE.md",
+        "!PROJECT-SPEC.md",
+        "!MEMORY.md",
+        "!node_modules/@nut-tree-fork/**",
+        "!node_modules/@nut-tree/**"
+      ]
     },
     "afterSign": "build/afterSignHook.js",
     "publish": {

@@ -47,8 +47,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish universal Mac package
-        run: npm run build:mac -- --universal --publish always
+      - name: Build and publish Mac package (arm64)
+        run: npm run build:mac -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -56,7 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mac-build
-          path: |
-            dist/*.dmg
-            dist/*.zip
+          path: dist/*.dmg
           if-no-files-found: error

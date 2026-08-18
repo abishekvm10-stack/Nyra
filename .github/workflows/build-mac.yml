@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Build macOS app
-        run: npm run build:mac -- --universal --dir --publish never
+        run: npm run build:mac -- --dir --publish never
 
       - name: Verify ad-hoc signature
         run: |
@@ -36,16 +36,8 @@ jobs:
           APP=$(find dist -name 'Nyra.app' -type d -print -quit)
           hdiutil create -volname "Nyra" -srcfolder "$APP" -ov -format UDZO "dist/Nyra.dmg"
 
-      - name: Create ZIP
-        run: |
-          APP=$(find dist -name 'Nyra.app' -type d -print -quit)
-          APP_DIR=$(dirname "$APP")
-          cd "$APP_DIR" && zip -ry "../../dist/Nyra.zip" "Nyra.app"
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Nyra-macOS
-          path: |
-            dist/*.dmg
-            dist/*.zip
+          path: dist/*.dmg
