@@ -97,6 +97,21 @@ function setupAutoUpdater() {
   }, 5000);
 }
 
+const MAX_HISTORY_ENTRIES = 30;
+
+// Capped, most-recent-first log of past compiles — opt-out via the
+// "Save history" toggle, never uploaded, stored the same way the API
+// key already is (electron-store's config.json, plaintext).
+function addHistoryEntry(entry) {
+  const history = store.get("history", []);
+  history.unshift({
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    at: new Date().toISOString(),
+    ...entry,
+  });
+  store.set("history", history.slice(0, MAX_HISTORY_ENTRIES));
+}
+
 function getSettings() {
   return {
     appVersion: app.getVersion(),
@@ -116,6 +131,7 @@ function getSettings() {
     ollamaUrl: store.get("ollamaUrl", "http://localhost:11434"),
     backendUrl: store.get("backendUrl", DEFAULT_BACKEND_URL),
     projectFolder: store.get("projectFolder", ""),
+    saveHistory: store.get("saveHistory", true),
   };
 }
 
@@ -231,6 +247,15 @@ async function handleHotkey() {
       : "";
     const compiled = await compilePrompt(rawText, settings, projectContext);
     clipboard.writeText(compiled);
+
+    if (settings.saveHistory) {
+      addHistoryEntry({
+        original: rawText,
+        compiled,
+        provider: settings.provider,
+        agentLabel: getTargetModelLabel(settings),
+      });
+    }
 
     if (useAutomation) {
       try {
@@ -526,4 +551,18 @@ ipcMain.handle("nyra:clear-project-folder", () => {
 });
 ipcMain.handle("nyra:open-external", (_event, url) => {
   if (/^https:\/\//.test(url)) shell.openExternal(url);
+});
+ipcMain.handle("nyra:get-history", () => store.get("history", []));
+ipcMain.handle("nyra:clear-history", () => {
+  store.set("history", []);
+  return true;
+});
+ipcMain.handle("nyra:delete-history-entry", (_event, id) => {
+  const history = store.get("history", []).filter((entry) => entry.id !== id);
+  store.set("history", history);
+  return history;
+});
+ipcMain.handle("nyra:copy-to-clipboard", (_event, text) => {
+  clipboard.writeText(text);
+  return true;
 });

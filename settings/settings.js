@@ -71,6 +71,10 @@ const tryItInput = $("tryItInput");
 const tryItRun = $("tryItRun");
 const tryItResult = $("tryItResult");
 const tryItMeta = $("tryItMeta");
+const saveHistoryCheckbox = $("saveHistory");
+const historyListEl = $("historyList");
+const historyEmptyEl = $("historyEmptyState");
+const clearHistoryButton = $("clearHistory");
 
 let currentSettings = {};
 let listeningForHotkey = false;
@@ -84,11 +88,95 @@ function wireNav() {
     item.addEventListener("click", () => {
       navItems.forEach((n) => n.classList.toggle("active", n === item));
       views.forEach((v) => v.classList.toggle("active", v.dataset.view === item.dataset.view));
+      if (item.dataset.view === "history") loadHistory();
     });
   });
 }
 
 wireNav();
+
+/* ---------- history ---------- */
+
+function formatHistoryTime(iso) {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function iconButton(label, glyph, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "icon-btn";
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+  btn.textContent = glyph;
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
+function renderHistoryEntry(entry) {
+  const card = document.createElement("div");
+  card.className = "history-card";
+
+  const header = document.createElement("div");
+  header.className = "history-card-header";
+
+  const meta = document.createElement("span");
+  meta.className = "history-meta";
+  meta.textContent = [formatHistoryTime(entry.at), entry.agentLabel].filter(Boolean).join(" · ");
+
+  const actions = document.createElement("div");
+  actions.className = "history-actions";
+  actions.append(
+    iconButton("Copy compiled prompt", "⧉", () => window.nyra.copyToClipboard(entry.compiled)),
+    iconButton("Copy original prompt", "↺", () => window.nyra.copyToClipboard(entry.original)),
+    iconButton("Delete", "✕", async () => {
+      await window.nyra.deleteHistoryEntry(entry.id);
+      loadHistory();
+    })
+  );
+
+  header.append(meta, actions);
+
+  const original = document.createElement("p");
+  original.className = "history-original";
+  original.textContent = entry.original;
+
+  const compiled = document.createElement("p");
+  compiled.className = "history-compiled";
+  compiled.textContent = entry.compiled;
+
+  card.append(header, original, compiled);
+  return card;
+}
+
+async function loadHistory() {
+  const entries = await window.nyra.getHistory();
+  historyListEl.innerHTML = "";
+
+  if (currentSettings.saveHistory === false) {
+    historyEmptyEl.textContent = "History is turned off — enable “Save history” in General to start keeping a log.";
+    historyEmptyEl.classList.remove("hidden");
+    return;
+  }
+  if (!entries.length) {
+    historyEmptyEl.textContent = "Nothing compiled yet.";
+    historyEmptyEl.classList.remove("hidden");
+    return;
+  }
+  historyEmptyEl.classList.add("hidden");
+  entries.forEach((entry) => historyListEl.appendChild(renderHistoryEntry(entry)));
+}
+
+clearHistoryButton.addEventListener("click", async () => {
+  await window.nyra.clearHistory();
+  loadHistory();
+});
+
+saveHistoryCheckbox.addEventListener("change", () => save({ immediate: true }));
 
 /* ---------- hotkey rendering ---------- */
 
@@ -213,6 +301,7 @@ function collectSettings() {
     targetAgent: targetAgentSelect.value,
     targetModelName: targetModelNameInput.value.trim(),
     automationEnabled: automationEnabledCheckbox.checked,
+    saveHistory: saveHistoryCheckbox.checked,
     apiKey: apiKeyInput.value.trim(),
     ollamaUrl: ollamaUrlInput.value.trim() || "http://localhost:11434",
     backendUrl: backendUrlInput.value.trim(),
@@ -429,6 +518,7 @@ async function loadSettings() {
   automationSection.classList.toggle("hidden", !automationSupported);
   automationUnavailableHint.classList.toggle("hidden", automationSupported);
   automationEnabledCheckbox.checked = automationSupported && Boolean(settings.automationEnabled);
+  saveHistoryCheckbox.checked = settings.saveHistory !== false;
 
   $("appVersion").textContent = settings.appVersion ? `v${settings.appVersion}` : "";
 

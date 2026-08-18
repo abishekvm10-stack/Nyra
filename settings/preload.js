@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld("nyra", {
   chooseProjectFolder: () => ipcRenderer.invoke("nyra:choose-project-folder"),
   clearProjectFolder: () => ipcRenderer.invoke("nyra:clear-project-folder"),
   openExternal: (url) => ipcRenderer.invoke("nyra:open-external", url),
+  getHistory: () => ipcRenderer.invoke("nyra:get-history"),
+  clearHistory: () => ipcRenderer.invoke("nyra:clear-history"),
+  deleteHistoryEntry: (id) => ipcRenderer.invoke("nyra:delete-history-entry", id),
+  copyToClipboard: (text) => ipcRenderer.invoke("nyra:copy-to-clipboard", text),
 });

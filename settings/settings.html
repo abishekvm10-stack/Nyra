@@ -16,6 +16,7 @@
         <button class="nav-item active" data-view="general" type="button">General</button>
         <button class="nav-item" data-view="provider" type="button">Provider</button>
         <button class="nav-item" data-view="tuning" type="button">Tuning</button>
+        <button class="nav-item" data-view="history" type="button">History</button>
         <button class="nav-item" data-view="about" type="button">About</button>
       </nav>
     </aside>
@@ -74,6 +75,22 @@
           Automatic paste isn't available on this platform yet &mdash; use
           Ctrl+C, the hotkey, then Ctrl+V.
         </p>
+
+        <div class="card">
+          <div class="row">
+            <div class="row-label">
+              <span class="row-title">Save history</span>
+              <span class="row-sub">Keeps your last 30 compiles on this device only</span>
+            </div>
+            <div class="row-control">
+              <label class="toggle">
+                <input id="saveHistory" type="checkbox" />
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ===== Provider ===== -->
@@ -223,6 +240,16 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- ===== History ===== -->
+      <section class="view" data-view="history">
+        <div class="view-header-row">
+          <h1 class="view-title">History</h1>
+          <button id="clearHistory" class="btn-secondary" type="button">Clear all</button>
+        </div>
+        <p class="hint hidden" id="historyEmptyState"></p>
+        <div class="history-list" id="historyList"></div>
       </section>
 
       <!-- ===== About ===== -->
