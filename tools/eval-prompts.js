@@ -15,17 +15,34 @@
 //     profile-structure check, intent preservation, sanitizer
 //     cleanliness, bloat), dumping full output to a timestamped file
 //     under tools/eval-output/ for side-by-side human reading.
+//
+//   node tools/eval-prompts.js --compare <model-id>
+//     The VERIFY step for model-knowledge.json's per-model overrides
+//     (see that file's header, and tools/model-research.js). Compares
+//     a researched model's OWN render text against what the same
+//     target would have gotten from the family-level fallback alone —
+//     i.e. "was researching this model specifically actually worth
+//     it?" Structural checks always run, free. A real-model live
+//     comparison additionally runs ONLY through genuinely free-tier
+//     providers (Groq always; Gemini's free tier if GEMINI_API_KEY is
+//     set) — deliberately never through a paid provider automatically,
+//     see model-knowledge.json's cost-constraint history. On success,
+//     writes the result into that model's `verified` field.
 
 const fs = require("fs");
 const path = require("path");
 const {
   buildSystemPrompt,
   getAgentProfile,
+  getEffectiveModelProfile,
+  resolveModelId,
   sanitizeCompiledText,
 } = require("../prompt-kit");
 const { compilePrompt } = require("../compiler");
 
 const LIVE = process.argv.includes("--live");
+const COMPARE_INDEX = process.argv.indexOf("--compare");
+const COMPARE_MODEL_ID = COMPARE_INDEX !== -1 ? process.argv[COMPARE_INDEX + 1] : null;
 
 // One representative target-model string per agent profile — enough
 // to prove each profile actually gets selected and actually changes
@@ -115,6 +132,54 @@ function runStructuralChecks() {
   const githubCopilotProfile = getAgentProfile("GitHub Copilot");
   if (githubCopilotProfile.id !== "coding-agent") {
     console.error(`FAIL: "GitHub Copilot" resolved to profile "${githubCopilotProfile.id}", expected "coding-agent"`);
+    failures++;
+  }
+
+  // 5. model-knowledge.json regression guards (2026-08-20 per-model
+  // override feature). The concrete bug this whole feature was
+  // rewritten to avoid: two models with identical tier+reasoning
+  // classification collapsing into shared, indistinguishable
+  // treatment. Claude Opus 5 and DeepSeek R1 are both
+  // tier:flagship/reasoning:true and MUST still produce different
+  // render text — if this ever fails, model-knowledge resolution has
+  // regressed into exactly the "shared bucket" behavior it exists to
+  // prevent.
+  const opusProfile = getEffectiveModelProfile("Claude Opus 5");
+  const deepseekProfile = getEffectiveModelProfile("Other DeepSeek R1");
+  if (opusProfile.reasoning !== true || deepseekProfile.reasoning !== true) {
+    console.error("FAIL: Claude Opus 5 and DeepSeek R1 fixture models are no longer both reasoning:true — update this test if the seed data changed intentionally");
+    failures++;
+  }
+  if (opusProfile.render === deepseekProfile.render) {
+    console.error("FAIL: Claude Opus 5 and DeepSeek R1 produced IDENTICAL render text despite being different models — per-model overrides have collapsed into a shared bucket");
+    failures++;
+  }
+
+  // 6. A coding-agent-wrapped model (e.g. "Cursor Sonnet 5") must NOT
+  // pick up a chat-family model override — that scope boundary is
+  // deliberate (see prompt-kit.js's MODEL_OVERRIDE_FAMILIES comment)
+  // and this guards against it silently expanding.
+  if (resolveModelId("Cursor Sonnet 5") !== null) {
+    console.error(`FAIL: "Cursor Sonnet 5" resolved to a model override (${resolveModelId("Cursor Sonnet 5")}) — coding-agent scope boundary has regressed`);
+    failures++;
+  }
+
+  // 7. A reasoning:true model's compiled system prompt must omit the
+  // worked example (showing an example while also saying "don't rely
+  // on examples" is self-contradictory) but include the reasoning-mode
+  // instruction; a non-reasoning model must do the opposite.
+  const deepseekPrompt = buildSystemPrompt("Other DeepSeek R1");
+  if (!deepseekPrompt.includes("reasoning-first model")) {
+    console.error("FAIL: reasoning:true model's system prompt is missing the reasoning-mode instruction");
+    failures++;
+  }
+  if (deepseekPrompt.includes("Example,")) {
+    console.error("FAIL: reasoning:true model's system prompt still includes a worked example — contradicts its own no-scaffolding instruction");
+    failures++;
+  }
+  const haikuPrompt = buildSystemPrompt("Claude Haiku 4.5");
+  if (haikuPrompt.includes("reasoning-first model")) {
+    console.error("FAIL: reasoning:false model's system prompt incorrectly includes the reasoning-mode instruction");
     failures++;
   }
 
@@ -226,7 +291,156 @@ async function runLiveEval() {
   return totalIssues;
 }
 
+// --- --compare tier (VERIFY step for model-knowledge.json) --------
+
+// Free-tier providers only, hardcoded — never "whichever key exists"
+// (see model-knowledge.json's own cost-constraint note). Groq is
+// always available since Nyra Cloud already depends on it; Gemini
+// only if its own free-tier key is explicitly set for this purpose.
+const FREE_TIER_PROVIDERS = ["groq"];
+
+function scoreOutputs(compiledList, fixtures) {
+  let totalIssues = 0;
+  let totalWords = 0;
+  for (let i = 0; i < compiledList.length; i++) {
+    const { issues } = checkFixture(fixtures[i], "compare", compiledList[i]);
+    totalIssues += issues.length;
+    totalWords += (compiledList[i] || "").split(/\s+/).length;
+  }
+  return { totalIssues, avgWords: Math.round(totalWords / compiledList.length) };
+}
+
+async function runCompare(modelId) {
+  const modelKnowledgePath = path.join(__dirname, "..", "model-knowledge.json");
+  const knowledge = JSON.parse(fs.readFileSync(modelKnowledgePath, "utf8"));
+  const entry = knowledge.models.find((m) => m.id === modelId);
+  if (!entry) {
+    console.error(`No entry with id "${modelId}" in model-knowledge.json.`);
+    return 1;
+  }
+  if (!entry.researched) {
+    console.error(`Entry "${modelId}" is not marked researched — nothing to verify yet (it's still a family-inherited seed).`);
+    return 1;
+  }
+
+  const targetModel = entry.displayName;
+  console.log(`=== Comparing "${modelId}" (${targetModel}) against its family fallback ===\n`);
+
+  // "Proposed" = the model's own render (already active in
+  // model-knowledge.json, since prompt-kit.js resolves exact-id
+  // matches first). "Baseline" = what the SAME target string would
+  // have produced without this entry existing at all — the family
+  // profile alone, exactly what getAgentProfile() (not
+  // getEffectiveModelProfile()) returns.
+  const proposedPrompt = buildSystemPrompt(targetModel);
+  const baselineProfile = getAgentProfile(targetModel);
+  const baselinePrompt = `${proposedPrompt.split("Rendering style:")[0]}Rendering style: ${baselineProfile.render}${
+    baselineProfile.example
+      ? `\n\nExample, ${baselineProfile.label} style — input "${baselineProfile.example.input}" produces:\n${baselineProfile.example.output}`
+      : ""
+  }`;
+
+  // --- Structural tier: always runs, zero cost -----------------
+  const structuralIssues = [];
+  if (proposedPrompt === baselinePrompt) {
+    structuralIssues.push("proposed render is IDENTICAL to the family fallback — research did not actually change anything");
+  }
+  if (!proposedPrompt.includes("===NYRA_OUTPUT_START===")) {
+    structuralIssues.push("proposed prompt is missing the output delimiter instruction");
+  }
+  console.log(`Structural: ${structuralIssues.length === 0 ? "PASSED" : structuralIssues.join("; ")}`);
+
+  // --- Live tier: free-tier providers only ----------------------
+  const apiKey = process.env.GROQ_API_KEY;
+  let liveResult = null;
+  if (!apiKey) {
+    console.log("\nGROQ_API_KEY not set — skipping live comparison. Structural-only verification.");
+  } else {
+    console.log(`\nRunning ${FIXTURES.length} fixtures through Groq (free tier) for both variants...`);
+
+    // Proposed: goes through compilePrompt/buildSystemPrompt exactly
+    // as a real compile would — targetModel resolves to this entry's
+    // own render via prompt-kit's exact-id match.
+    const proposedOutputs = [];
+    for (const fixture of FIXTURES) {
+      const settings = { provider: "groq", tier: "fast", apiKey, targetAgent: "Other", targetModelName: targetModel, taskType: "auto" };
+      try {
+        proposedOutputs.push(await compilePrompt(fixture.input, settings, ""));
+      } catch {
+        proposedOutputs.push("");
+      }
+    }
+
+    // Baseline: the exact same Groq call, but with the family-only
+    // system prompt built above (baselinePrompt) — compilePrompt has
+    // no way to take an override system prompt, so this one raw call
+    // is unavoidable to test "what if this entry didn't exist at all."
+    const baselineOutputs = [];
+    for (const fixture of FIXTURES) {
+      try {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: "openai/gpt-oss-20b",
+            temperature: 0.2,
+            max_tokens: 1500,
+            messages: [
+              { role: "system", content: baselinePrompt },
+              { role: "user", content: `===NYRA_INPUT_START===\n${fixture.input}\n===NYRA_INPUT_END===` },
+            ],
+          }),
+        });
+        const data = await res.json();
+        baselineOutputs.push(sanitizeCompiledText(data?.choices?.[0]?.message?.content || ""));
+      } catch {
+        baselineOutputs.push("");
+      }
+    }
+
+    const proposedScore = scoreOutputs(proposedOutputs.map(sanitizeCompiledText), FIXTURES);
+    const baselineScore = scoreOutputs(baselineOutputs, FIXTURES);
+    console.log(`  Proposed (model-specific): ${proposedScore.totalIssues} issues across ${FIXTURES.length} fixtures, avg ${proposedScore.avgWords} words/output`);
+    console.log(`  Baseline (family fallback): ${baselineScore.totalIssues} issues across ${FIXTURES.length} fixtures, avg ${baselineScore.avgWords} words/output`);
+
+    const verdict = proposedScore.totalIssues < baselineScore.totalIssues
+      ? "improved"
+      : proposedScore.totalIssues > baselineScore.totalIssues
+      ? "regressed"
+      : "no clear difference on these fixtures";
+    console.log(`  Verdict: ${verdict}`);
+
+    liveResult = {
+      provider: "groq",
+      date: new Date().toISOString(),
+      method: "structural + free-tier live compare",
+      result: `${verdict} (proposed: ${proposedScore.totalIssues} issues/${proposedScore.avgWords}w avg, baseline: ${baselineScore.totalIssues} issues/${baselineScore.avgWords}w avg)`,
+    };
+  }
+
+  if (structuralIssues.length > 0) {
+    console.log("\nNOT updating verified — structural check failed.");
+    return 1;
+  }
+
+  if (liveResult) {
+    entry.verified = liveResult;
+    delete entry.verifyNote;
+    fs.writeFileSync(modelKnowledgePath, JSON.stringify(knowledge, null, 2) + "\n");
+    console.log(`\nUpdated model-knowledge.json: "${modelId}".verified set.`);
+  } else {
+    console.log("\nStructural checks passed but no live comparison ran (no GROQ_API_KEY) — verified left as-is.");
+  }
+
+  return 0;
+}
+
 (async () => {
+  if (COMPARE_MODEL_ID) {
+    process.exit(await runCompare(COMPARE_MODEL_ID));
+    return;
+  }
+
   const structuralFailures = runStructuralChecks();
   const liveFailures = LIVE ? await runLiveEval() : 0;
   if (!LIVE) {

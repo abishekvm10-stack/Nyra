@@ -1,0 +1,104 @@
+name: Research model-knowledge.json
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily, 06:00 UTC — cheap to run more often, no need to
+  workflow_dispatch: {} # manual trigger, for testing this before trusting the schedule
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# DETECT -> RESEARCH -> VERIFY -> PROPOSE, matching the plan in
+# docs/PLAN-auto-detect-agent.md's sibling model-knowledge plan.
+#
+# Structurally free, not just cheap: GROQ_API_KEY is the only secret
+# this ever uses (Nyra Cloud's own key, already provisioned) — never a
+# paid provider's key, even if one happens to exist in this repo's
+# secrets for some other reason. tools/eval-prompts.js's --compare
+# mode enforces the same free-tier-only rule independently on the
+# VERIFY side, so a mistake here doesn't rely on this workflow alone
+# to stay free.
+#
+# Never pushes to main directly. A human merges every change to
+# model-knowledge.json — see that file's own header and this repo's
+# 2026-08-19 change history for why: a bad auto-applied prompting
+# change degrades output for every Nyra user with no visible cause,
+# so the review gate is deliberate, not an oversight.
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Detect and research new models
+        id: research
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: node tools/model-research.js --research
+
+      - name: Check whether anything actually changed
+        id: diff
+        run: |
+          if git diff --quiet -- model-knowledge.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify each newly-researched model
+        if: steps.diff.outputs.changed == 'true'
+        id: verify
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          echo "## Verification results" > verify-report.md
+          echo "" >> verify-report.md
+          IFS=',' read -ra IDS <<< "${{ steps.research.outputs.new_ids }}"
+          for id in "${IDS[@]}"; do
+            echo "### \`$id\`" >> verify-report.md
+            echo '```' >> verify-report.md
+            node tools/eval-prompts.js --compare "$id" >> verify-report.md 2>&1 || true
+            echo '```' >> verify-report.md
+            echo "" >> verify-report.md
+          done
+          cat verify-report.md
+
+      # tools/eval-prompts.js --compare writes real-model verification
+      # results (or leaves the entry unverified with an honest note)
+      # directly into model-knowledge.json — re-check for changes here
+      # rather than trusting the earlier diff, since VERIFY can itself
+      # modify the file even when RESEARCH's own diff already fired.
+      - name: Open a pull request with the proposed changes
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          BRANCH="model-knowledge/auto-$(date +%Y%m%d-%H%M%S)"
+          git config user.name "nyra-research-bot"
+          git config user.email "actions@github.com"
+          git checkout -b "$BRANCH"
+          git add model-knowledge.json
+          git commit -m "Research: propose model-knowledge.json updates for ${{ steps.research.outputs.new_ids }}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "Research: model-knowledge.json — ${{ steps.research.outputs.new_ids }}" \
+            --body-file verify-report.md \
+            --head "$BRANCH" \
+            --base main
+
+      - name: Nothing new found
+        if: steps.diff.outputs.changed != 'true'
+        run: echo "No new models detected this run (or nothing researched cleanly usable) — no PR opened. This is the normal, expected outcome most days."

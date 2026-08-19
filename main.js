@@ -2,7 +2,7 @@ const { app, BrowserWindow, Tray, Menu, globalShortcut, clipboard, Notification,
 const path = require("path");
 const Store = require("electron-store");
 const { autoUpdater } = require("electron-updater");
-const { compilePrompt, getTargetModelLabel } = require("./compiler");
+const { compilePrompt, getTargetModelLabel, refreshModelKnowledgeFromRemote } = require("./compiler");
 const { getRelevantContext } = require("./context");
 const automation = require("./automation");
 
@@ -550,6 +550,15 @@ app.whenReady().then(() => {
 
   createSettingsWindow();
   setupAutoUpdater();
+
+  // Deliberately not awaited — this is a best-effort background
+  // freshness check for model-knowledge.json (per-model prompting
+  // structure, see prompt-kit.js/compiler.js). The app is already
+  // fully usable on the bundled copy; startup must never wait on a
+  // network call that could be slow or hang. Every failure path
+  // inside refreshModelKnowledgeFromRemote() is caught internally, so
+  // this can never throw or produce an unhandled rejection here.
+  refreshModelKnowledgeFromRemote(store);
 
   if (process.platform === "darwin" && app.dock) app.dock.hide();
 });

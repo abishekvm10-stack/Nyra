@@ -11,6 +11,19 @@
 //                      agent-specific constraints
 // The compiling model classifies task type itself, inside the same
 // call — no second request, no extra latency.
+//
+// A third source, model-knowledge.json, sits ABOVE the family-level
+// AGENT_PROFILES below: it holds genuinely per-INDIVIDUAL-model
+// prompting structure (Claude Opus 5 and DeepSeek R1 can both be
+// "flagship reasoning" and still need different render text — see
+// that file's own header comment). AGENT_PROFILES is never deleted or
+// replaced by it — it's the fallback for any model that isn't in
+// model-knowledge.json yet, or whose entry there is still an
+// unresearched seed. See getEffectiveModelProfile() below for the
+// actual resolution order.
+
+const fs = require("fs");
+const path = require("path");
 
 const OUTPUT_START = "===NYRA_OUTPUT_START===";
 const OUTPUT_END = "===NYRA_OUTPUT_END===";
@@ -130,6 +143,154 @@ function getAgentProfile(targetModel) {
   return AGENT_PROFILES[AGENT_PROFILES.length - 1]; // generic
 }
 
+// --- model-knowledge.json: per-individual-model overrides ---------
+//
+// Loaded once at require-time from the copy bundled with the app,
+// defensively — a missing or corrupt file must never break compiling,
+// it just means no model has been individually researched yet and
+// everything falls back to the family-level AGENT_PROFILES above
+// exactly as before this file existed. `let`, not `const`: compiler.js
+// can call refreshModelKnowledge() after fetching a fresher copy from
+// GitHub (see its own header comment) — every function below reads
+// through this same module-scope binding, so a later reassignment is
+// picked up by the very next compile with no other code needing to
+// change.
+function loadModelKnowledge() {
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, "model-knowledge.json"), "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed && parsed.models) ? parsed.models : [];
+  } catch {
+    return [];
+  }
+}
+
+let MODEL_KNOWLEDGE = loadModelKnowledge();
+
+// Called by compiler.js after a successful fetch of a fresher
+// model-knowledge.json. Validates the shape before ever touching the
+// live data — a network response that parsed as JSON but isn't
+// actually the expected {models: [...]} shape must be rejected here,
+// not allowed to silently replace working data with something
+// useless. Returns true on success, false (and leaves MODEL_KNOWLEDGE
+// untouched) on rejection.
+function refreshModelKnowledge(parsedJson) {
+  const models = parsedJson && parsedJson.models;
+  if (!Array.isArray(models) || models.length === 0) return false;
+  const looksValid = models.every((m) => m && typeof m.id === "string" && typeof m.family === "string");
+  if (!looksValid) return false;
+  MODEL_KNOWLEDGE = models;
+  return true;
+}
+
+// Scoped to chat-model families only, deliberately. A coding agent's
+// render style (Markdown headers, no persona, files/verify/done-when)
+// doesn't currently vary by which underlying model it's running —
+// "Cursor + Sonnet 5" and "Cursor + GPT-5" get identical treatment
+// today, and extending per-model overrides into that profile would be
+// new behavior beyond what this phase was planned and approved for,
+// not a natural extension of it.
+const MODEL_OVERRIDE_FAMILIES = new Set(["claude", "gpt", "gemini", "open-weight"]);
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Matches a model-knowledge entry against the flat target-model string
+// by alias, not by exact id — this is what lets "Claude Sonnet 5" and
+// (were coding-agent in scope) "Cursor Sonnet 5" both resolve to the
+// same underlying claude-sonnet-5 entry, since the alias ("sonnet 5")
+// names the model itself, independent of which agent wraps it. Longest
+// matching alias wins when more than one could match.
+function findModelEntry(targetModel, familyId) {
+  if (!MODEL_OVERRIDE_FAMILIES.has(familyId)) return null;
+  const haystack = (targetModel || "").toLowerCase();
+  let best = null;
+  for (const entry of MODEL_KNOWLEDGE) {
+    if (entry.family !== familyId) continue;
+    for (const alias of entry.aliases || []) {
+      const pattern = new RegExp(`\\b${escapeRegExp(alias.toLowerCase())}\\b`, "i");
+      if (pattern.test(haystack) && (!best || alias.length > best.aliasLength)) {
+        best = { entry, aliasLength: alias.length };
+      }
+    }
+  }
+  return best ? best.entry : null;
+}
+
+// Accepts either the flat "Agent Model" string compiler.js already
+// builds, or a {agent, model} pair (the shape the parked auto-detect
+// plan's detectContext() returns) — joins the latter the same way
+// getTargetModelLabel() does, so both callers land on the same id.
+function resolveModelId(targetModelOrPair) {
+  const flat =
+    typeof targetModelOrPair === "string"
+      ? targetModelOrPair
+      : [targetModelOrPair?.agent, targetModelOrPair?.model].filter(Boolean).join(" ");
+  const familyProfile = getAgentProfile(flat);
+  const entry = findModelEntry(flat, familyProfile.id);
+  return entry ? entry.id : null;
+}
+
+// A same-family, same-tier entry that HAS been researched — used only
+// as a labeled guess for a model whose own entry exists but isn't
+// researched yet. No live data exercises this today (every seed entry
+// currently has identical, family-inherited render text, so there's
+// nothing better to borrow from) — it exists so Phase 3's research
+// pipeline has somewhere to land automatically: the moment even one
+// model in a family+tier gets real researched content, every
+// still-unresearched sibling in that same bucket immediately benefits
+// from it without any prompt-kit.js change being needed.
+function findResearchedNeighbor(family, tier, excludeId) {
+  return MODEL_KNOWLEDGE.find(
+    (e) => e.family === family && e.tier === tier && e.researched && e.id !== excludeId
+  );
+}
+
+// The actual resolution used by buildSystemPrompt(), in priority:
+//   1. This model's own entry, if it's been researched — its render.
+//   2. This model's own entry, if it exists but ISN'T researched yet —
+//      a same-family/tier neighbor's researched render, as a labeled
+//      guess (see findResearchedNeighbor above), or the family text if
+//      no such neighbor exists yet.
+//   3. No entry for this model at all — family text (AGENT_PROFILES),
+//      unchanged from before this file existed.
+// `reasoning` is taken from this model's own entry whenever one
+// exists, regardless of researched status — that classification is a
+// deliberate day-one guess (see model-knowledge.json's header) worth
+// acting on even before full research lands.
+function getEffectiveModelProfile(targetModel) {
+  const familyProfile = getAgentProfile(targetModel);
+  const modelEntry = findModelEntry(targetModel, familyProfile.id);
+
+  if (!modelEntry) {
+    return { ...familyProfile, reasoning: false, modelId: null, guessSource: null };
+  }
+
+  if (modelEntry.researched && modelEntry.render) {
+    return {
+      ...familyProfile,
+      label: modelEntry.displayName || familyProfile.label,
+      render: modelEntry.render,
+      example: modelEntry.example,
+      reasoning: Boolean(modelEntry.reasoning),
+      modelId: modelEntry.id,
+      guessSource: null,
+    };
+  }
+
+  const neighbor = findResearchedNeighbor(modelEntry.family, modelEntry.tier, modelEntry.id);
+  return {
+    ...familyProfile,
+    label: modelEntry.displayName || familyProfile.label,
+    render: neighbor ? neighbor.render : familyProfile.render,
+    example: neighbor ? neighbor.example : familyProfile.example,
+    reasoning: Boolean(modelEntry.reasoning),
+    modelId: modelEntry.id,
+    guessSource: neighbor ? `inherited from ${neighbor.id}, not yet researched for this model` : null,
+  };
+}
+
 const CORE_RULES = `You are a prompt compiler. Turn the user's rough input (given between ${INPUT_START} and ${INPUT_END} below) into a structured, model-ready prompt.
 
 Faithfulness rule — this is the most important instruction: preserve exactly what the user asked for. You may make safe, obvious inferences (a sensible Role, obvious domain framing), but never invent constraints the user didn't imply — no invented tone, length, audience, deadline, or tech stack. If a genuine ambiguity would change the answer, name it in one short line inside the most relevant section rather than silently picking for the user.
@@ -153,8 +314,24 @@ function taskTypeInstructions(compact) {
 // Settings when auto-classification keeps guessing wrong for their
 // particular workflow (risk 3's escape hatch) — skips classification
 // entirely and just uses that skeleton.
+// Cross-cutting, independent of which family/model render style was
+// selected: reasoning-first models (DeepSeek R1, o-series, Claude
+// extended thinking) measurably get WORSE with manual chain-of-thought
+// prompting and heavy few-shot — they reason internally, and external
+// scaffolding fights that rather than helping (confirmed across
+// multiple vendors' own documentation, not a single-source claim; see
+// model-knowledge.json's o3/deepseek-r1 entries for the sources). This
+// is why it's applied as a rule here rather than duplicated into every
+// model's own render text.
+const REASONING_MODE_NOTE =
+  "This is a reasoning-first model: it reasons internally before answering. Do not add manual step-by-step / chain-of-thought instructions or a worked example — external reasoning scaffolding measurably hurts models like this rather than helping. State the goal, constraints, and desired output shape directly and concisely.";
+
+// The optional explicit override lets a user pin a task type from
+// Settings when auto-classification keeps guessing wrong for their
+// particular workflow (risk 3's escape hatch) — skips classification
+// entirely and just uses that skeleton.
 function buildSystemPrompt(targetModel, taskTypeOverride) {
-  const profile = getAgentProfile(targetModel);
+  const profile = getEffectiveModelProfile(targetModel);
   const compact = Boolean(profile.compact);
   const types = compact ? TASK_TYPES_COMPACT : TASK_TYPES;
 
@@ -168,11 +345,19 @@ function buildSystemPrompt(targetModel, taskTypeOverride) {
       ? `The task type is already known: "${taskTypeOverride}" — skip classification and use its sections: ${types[taskTypeOverride]}.`
       : taskTypeInstructions(compact);
 
-  const exampleBlock = profile.example
-    ? `\n\nExample, ${profile.label} style — input "${profile.example.input}" produces:\n${OUTPUT_START}\n${profile.example.output}\n${OUTPUT_END}`
-    : "";
+  // Reasoning models skip the worked example on purpose — the note
+  // above already tells the compiling model not to over-scaffold, and
+  // including a full example alongside that instruction would be a
+  // direct contradiction (show a worked example while saying "don't
+  // add examples").
+  const exampleBlock =
+    profile.example && !profile.reasoning
+      ? `\n\nExample, ${profile.label} style — input "${profile.example.input}" produces:\n${OUTPUT_START}\n${profile.example.output}\n${OUTPUT_END}`
+      : "";
 
-  return `${CORE_RULES}\n\n${targetLine}\n\n${classification}\n\nRendering style: ${profile.render}${exampleBlock}`;
+  const reasoningBlock = profile.reasoning ? `\n\n${REASONING_MODE_NOTE}` : "";
+
+  return `${CORE_RULES}\n\n${targetLine}\n\n${classification}\n\nRendering style: ${profile.render}${reasoningBlock}${exampleBlock}`;
 }
 
 function wrapUserInput(rawText) {
@@ -243,6 +428,15 @@ module.exports = {
   wrapUserInput,
   sanitizeCompiledText,
   getAgentProfile,
+  getEffectiveModelProfile,
+  resolveModelId,
+  refreshModelKnowledge,
+  // A function, not a direct array export — `MODEL_KNOWLEDGE` is
+  // reassigned in place by refreshModelKnowledge() (see that
+  // function's comment), so exporting the array value itself would
+  // capture a snapshot from require-time and silently go stale after
+  // the first refresh. Callers that need the current data call this.
+  getModelKnowledge: () => MODEL_KNOWLEDGE,
   TASK_TYPES,
   TASK_TYPES_COMPACT,
   AGENT_PROFILES,

@@ -7,7 +7,65 @@
 // injection defense, output sanitizing) lives in prompt-kit.js — this
 // file just wires it to each provider's API shape.
 
-const { buildSystemPrompt, wrapUserInput, sanitizeCompiledText } = require("./prompt-kit");
+const { buildSystemPrompt, wrapUserInput, sanitizeCompiledText, refreshModelKnowledge } = require("./prompt-kit");
+
+// Keeps model-knowledge.json (per-individual-model prompting
+// structure — see prompt-kit.js's own header comment) fresher than
+// the copy bundled at build time, without needing an app update for
+// every newly-researched model. GitHub itself serves the file — no
+// new hosting, and it's the same trust boundary the release pipeline
+// already relies on.
+const MODEL_KNOWLEDGE_URL = "https://raw.githubusercontent.com/abishekvm10-stack/Nyra/main/model-knowledge.json";
+const MODEL_KNOWLEDGE_CACHE_KEY = "modelKnowledgeCache";
+const MODEL_KNOWLEDGE_TTL_MS = 24 * 60 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 8000;
+
+// Called once at app startup (main.js). Two independent steps, each
+// allowed to fail silently — this must NEVER throw or delay startup,
+// since the app is already fully usable on the bundled copy alone:
+//
+//   1. Apply whatever's in the local cache immediately, no network —
+//      even a slightly stale cached copy is presumably fresher than
+//      what shipped with this build, so it's preferred over the
+//      bundled data on its own, independent of the TTL below.
+//   2. If that cache is missing or older than the TTL, attempt a
+//      background fetch; on success, apply it AND re-cache with a
+//      fresh timestamp. On any failure (offline, timeout, bad JSON,
+//      or prompt-kit's own shape validation rejecting it), do
+//      nothing further — whatever step 1 already applied (or the
+//      bundled copy, if step 1 had nothing) stays in effect.
+async function refreshModelKnowledgeFromRemote(store) {
+  const cached = store.get(MODEL_KNOWLEDGE_CACHE_KEY);
+  if (cached && cached.data) {
+    refreshModelKnowledge(cached.data); // best-effort; a bad cached shape just leaves the bundled copy in place
+  }
+
+  const fetchedAt = cached && cached.fetchedAt;
+  const isFresh = typeof fetchedAt === "number" && Date.now() - fetchedAt < MODEL_KNOWLEDGE_TTL_MS;
+  if (isFresh) return;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(MODEL_KNOWLEDGE_URL, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!res.ok) return;
+
+    const json = await res.json();
+    const applied = refreshModelKnowledge(json);
+    if (applied) {
+      store.set(MODEL_KNOWLEDGE_CACHE_KEY, { fetchedAt: Date.now(), data: json });
+    }
+  } catch {
+    // Offline, timed out, or malformed response — silently keep
+    // whatever step 1 already applied. Never surfaced to the user;
+    // this is a background freshness attempt, not a required step.
+  }
+}
 
 // Same tiering idea as the extension: local = free + unlimited
 // (capped only by your hardware), groq = free but rate-limited,
@@ -220,4 +278,4 @@ async function callGemini(rawText, model, apiKey, systemPrompt) {
   return data.candidates[0].content.parts[0].text.trim();
 }
 
-module.exports = { compilePrompt, MODEL_MAP, getTargetModelLabel };
+module.exports = { compilePrompt, MODEL_MAP, getTargetModelLabel, refreshModelKnowledgeFromRemote };

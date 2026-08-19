@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-20T00:00:00.000Z",
+  "_comment": "Per-individual-model prompting knowledge, read by prompt-kit.js. Every entry below is a Phase-1 SEED, not a research result: render/example text is inherited verbatim from prompt-kit.js's family-level AGENT_PROFILES (the only real data that exists yet), and tier/reasoning are best-informed classification, not verified findings. researched:false means exactly that — this model has not been individually researched. The Phase-3 pipeline (tools/model-research.js, not built yet) is what flips entries to researched:true with model-specific render text and a real source. Do not treat a seed entry's render text as if it were already model-specific — it is deliberately identical to its family's AGENT_PROFILES entry until real research replaces it.",
+  "models": [
+    {
+      "id": "claude-opus-5",
+      "family": "claude",
+      "displayName": "Claude Opus 5",
+      "aliases": [
+        "opus 5",
+        "opus-5",
+        "opus5"
+      ],
+      "tier": "flagship",
+      "reasoning": true,
+      "researched": false,
+      "render": "Render every section as an XML-style tag named after the section, lowercase, hyphenated if multi-word (e.g. <task>, <context>, <done-when>). Claude follows this precisely and reasons well over clearly-scoped, nuanced instructions — a section can contain a short nested list where that adds clarity.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "<role>Tenant writing a maintenance request</role>\n<context>The heater in the user's rental unit is broken. No other details were given about how long, severity, or prior contact.</context>\n<task>Write a clear, polite message to the landlord reporting the broken heater and requesting repair.</task>\n<constraints>Do not invent specifics not given — no assumed dates, no assumed prior complaints, no assumed lease terms.</constraints>\n<output-format>A short message, ready to send as-is (email or text), professional but not stiff.</output-format>"
+      },
+      "notes": "Seed inherited from the claude family profile. Anthropic's current general guidance (not Opus-5-specific) de-emphasizes mandatory XML and heavy role-framing for modern models — worth folding in once this entry is actually researched.",
+      "source": null,
+      "verified": null,
+      "verifyNote": "Not yet researched. Anthropic also has no free-tier API, so even once researched this will likely stay unverified unless a paid key is used manually."
+    },
+    {
+      "id": "claude-sonnet-5",
+      "family": "claude",
+      "displayName": "Claude Sonnet 5",
+      "aliases": [
+        "sonnet 5",
+        "sonnet-5",
+        "sonnet5"
+      ],
+      "tier": "standard",
+      "reasoning": true,
+      "researched": false,
+      "render": "Render every section as an XML-style tag named after the section, lowercase, hyphenated if multi-word (e.g. <task>, <context>, <done-when>). Claude follows this precisely and reasons well over clearly-scoped, nuanced instructions — a section can contain a short nested list where that adds clarity.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "<role>Tenant writing a maintenance request</role>\n<context>The heater in the user's rental unit is broken. No other details were given about how long, severity, or prior contact.</context>\n<task>Write a clear, polite message to the landlord reporting the broken heater and requesting repair.</task>\n<constraints>Do not invent specifics not given — no assumed dates, no assumed prior complaints, no assumed lease terms.</constraints>\n<output-format>A short message, ready to send as-is (email or text), professional but not stiff.</output-format>"
+      },
+      "notes": "Seed inherited from the claude family profile — identical text to Opus 5's entry above until each is actually researched separately.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "claude-fable-5",
+      "family": "claude",
+      "displayName": "Claude Fable 5",
+      "aliases": [
+        "fable 5",
+        "fable-5",
+        "fable5"
+      ],
+      "tier": "standard",
+      "reasoning": false,
+      "researched": false,
+      "render": "Render every section as an XML-style tag named after the section, lowercase, hyphenated if multi-word (e.g. <task>, <context>, <done-when>). Claude follows this precisely and reasons well over clearly-scoped, nuanced instructions — a section can contain a short nested list where that adds clarity.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "<role>Tenant writing a maintenance request</role>\n<context>The heater in the user's rental unit is broken. No other details were given about how long, severity, or prior contact.</context>\n<task>Write a clear, polite message to the landlord reporting the broken heater and requesting repair.</task>\n<constraints>Do not invent specifics not given — no assumed dates, no assumed prior complaints, no assumed lease terms.</constraints>\n<output-format>A short message, ready to send as-is (email or text), professional but not stiff.</output-format>"
+      },
+      "notes": "Seed inherited from the claude family profile. tier/reasoning are an unverified guess — no primary source read for this specific model yet.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "claude-haiku-4-5",
+      "family": "claude",
+      "displayName": "Claude Haiku 4.5",
+      "aliases": [
+        "haiku 4.5",
+        "haiku 4-5",
+        "haiku4.5",
+        "haiku 4"
+      ],
+      "tier": "fast",
+      "reasoning": false,
+      "researched": false,
+      "render": "Render every section as an XML-style tag named after the section, lowercase, hyphenated if multi-word (e.g. <task>, <context>, <done-when>). Claude follows this precisely and reasons well over clearly-scoped, nuanced instructions — a section can contain a short nested list where that adds clarity.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "<role>Tenant writing a maintenance request</role>\n<context>The heater in the user's rental unit is broken. No other details were given about how long, severity, or prior contact.</context>\n<task>Write a clear, polite message to the landlord reporting the broken heater and requesting repair.</task>\n<constraints>Do not invent specifics not given — no assumed dates, no assumed prior complaints, no assumed lease terms.</constraints>\n<output-format>A short message, ready to send as-is (email or text), professional but not stiff.</output-format>"
+      },
+      "notes": "Seed inherited from the claude family profile. Marked tier:fast as a guess (smaller/faster models in general benefit from less structure per this session's research) — not yet confirmed for this specific model.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "gpt-5",
+      "family": "gpt",
+      "displayName": "GPT-5",
+      "aliases": [
+        "gpt-5",
+        "gpt5",
+        "gpt 5"
+      ],
+      "tier": "flagship",
+      "reasoning": true,
+      "researched": false,
+      "render": "Render every section as a Markdown header (\"## Section\") followed by its content. Be direct and explicit, and if the response itself should use particular Markdown structure, say so plainly in Output Format.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "## Role\nTenant writing a maintenance request\n\n## Context\nThe heater in the user's rental unit is broken. No other details were given.\n\n## Task\nWrite a clear, polite message to the landlord reporting the issue and requesting repair.\n\n## Constraints\nDo not invent specifics not given — no assumed dates, no assumed prior complaints.\n\n## Output Format\nA short message, ready to send as-is, professional but not stiff."
+      },
+      "notes": "Seed inherited from the gpt family profile. reasoning:true is a guess (GPT-5-class models support a reasoning_effort setting per this session's research, but that guide treats effort as a config knob, not a prompting change — worth re-examining once researched).",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "gpt-4o",
+      "family": "gpt",
+      "displayName": "GPT-4o",
+      "aliases": [
+        "gpt-4o",
+        "gpt4o",
+        "4o"
+      ],
+      "tier": "standard",
+      "reasoning": false,
+      "researched": false,
+      "render": "Render every section as a Markdown header (\"## Section\") followed by its content. Be direct and explicit, and if the response itself should use particular Markdown structure, say so plainly in Output Format.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "## Role\nTenant writing a maintenance request\n\n## Context\nThe heater in the user's rental unit is broken. No other details were given.\n\n## Task\nWrite a clear, polite message to the landlord reporting the issue and requesting repair.\n\n## Constraints\nDo not invent specifics not given — no assumed dates, no assumed prior complaints.\n\n## Output Format\nA short message, ready to send as-is, professional but not stiff."
+      },
+      "notes": "Seed inherited from the gpt family profile.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "o3",
+      "family": "gpt",
+      "displayName": "o3",
+      "aliases": [
+        "o3"
+      ],
+      "tier": "flagship",
+      "reasoning": true,
+      "researched": false,
+      "render": "Render every section as a Markdown header (\"## Section\") followed by its content. Be direct and explicit, and if the response itself should use particular Markdown structure, say so plainly in Output Format.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "## Role\nTenant writing a maintenance request\n\n## Context\nThe heater in the user's rental unit is broken. No other details were given.\n\n## Task\nWrite a clear, polite message to the landlord reporting the issue and requesting repair.\n\n## Constraints\nDo not invent specifics not given — no assumed dates, no assumed prior complaints.\n\n## Output Format\nA short message, ready to send as-is, professional but not stiff."
+      },
+      "notes": "reasoning:true is well-supported (o-series are OpenAI's reasoning-model line per this session's research on prompting thinking models — minimal scaffolding, no manual CoT), applied here via the reasoning cross-cutting rule even though render text itself is still an inherited seed.",
+      "source": "https://www.helicone.ai/blog/prompt-thinking-models",
+      "verified": null
+    },
+    {
+      "id": "gemini-3-pro",
+      "family": "gemini",
+      "displayName": "Gemini 3 Pro",
+      "aliases": [
+        "gemini 3 pro",
+        "gemini-3-pro",
+        "3 pro"
+      ],
+      "tier": "flagship",
+      "reasoning": true,
+      "researched": false,
+      "render": "Render every section as a bolded plain-text label (\"**Section:** content\") on its own line. State multi-step tasks as an explicit numbered sequence rather than a single dense sentence.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "**Role:** Tenant writing a maintenance request\n**Context:** The heater in the user's rental unit is broken. No other details were given.\n**Task:** Write a clear, polite message to the landlord reporting the issue and requesting repair.\n**Constraints:** Do not invent specifics not given.\n**Output Format:** A short, ready-to-send message, professional but not stiff."
+      },
+      "notes": "Seed inherited from the gemini family profile. tier/reasoning are a guess pending research.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "gemini-3-flash",
+      "family": "gemini",
+      "displayName": "Gemini 3 Flash",
+      "aliases": [
+        "gemini 3 flash",
+        "gemini-3-flash",
+        "3 flash"
+      ],
+      "tier": "fast",
+      "reasoning": false,
+      "researched": false,
+      "render": "Render every section as a bolded plain-text label (\"**Section:** content\") on its own line. State multi-step tasks as an explicit numbered sequence rather than a single dense sentence.",
+      "example": {
+        "input": "write something for my landlord about the broken heater",
+        "output": "**Role:** Tenant writing a maintenance request\n**Context:** The heater in the user's rental unit is broken. No other details were given.\n**Task:** Write a clear, polite message to the landlord reporting the issue and requesting repair.\n**Constraints:** Do not invent specifics not given.\n**Output Format:** A short, ready-to-send message, professional but not stiff."
+      },
+      "notes": "Seed inherited from the gemini family profile.",
+      "source": null,
+      "verified": null
+    },
+    {
+      "id": "deepseek-r1",
+      "family": "open-weight",
+      "displayName": "DeepSeek R1",
+      "aliases": [
+        "deepseek r1",
+        "deepseek-r1",
+        "r1"
+      ],
+      "tier": "flagship",
+      "reasoning": true,
+      "researched": true,
+      "render": "Minimal. State the goal, constraints, and desired output shape in plain sentences. No manual chain-of-thought instruction, no few-shot example, no nested structure — this model reasons internally and external scaffolding measurably hurts it. All instructions go in the user turn, never a system-role persona.",
+      "example": null,
+      "notes": "The one entry actually backed by real primary-source research this session (not a family-inherited seed) — DeepSeek's own documented guidance is explicit that even Claude's mild XML tagging should be avoided here, which is the concrete proof that same tier+reasoning classification does not mean same render text.",
+      "source": "https://docs.together.ai/docs/prompting-deepseek-r1",
+      "verified": {
+        "provider": "groq",
+        "date": "2026-08-19T19:52:15.546Z",
+        "method": "structural + free-tier live compare",
+        "result": "no clear difference on these fixtures (proposed: 12 issues/1w avg, baseline: 12 issues/1w avg)"
+      }
+    }
+  ]
+}
